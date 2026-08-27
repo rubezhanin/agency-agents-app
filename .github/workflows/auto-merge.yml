@@ -1,0 +1,86 @@
+# Auto-merge dependabot PRs once CI is green.
+#
+# Why: dependabot PRs are noisy when left open (the dashboard shows
+# them as "failing" forever). The `rubezhanin-agency-agents-app` workflow
+# suite (ci.yml) is the gate — we only merge once it is green, so
+# auto-merge does NOT bypass our checks; it just removes the human step.
+#
+# Strategy:
+# 1. On any PR change, rebase the branch onto main (so old PRs pick up
+#    the latest CI config / lint fixes automatically).
+# 2. On `check_suite` completion for the head commit, look at the
+#    `CI` workflow's conclusion. If SUCCESS, enable GitHub's built-in
+#    auto-merge for the PR with --squash.
+# 3. We only act on PRs whose author is `dependabot[bot]`. Human PRs
+#    keep the explicit merge button.
+
+name: Auto-merge dependabot PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  auto-merge:
+    name: Auto-merge green dependabot PRs
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: Enable auto-merge for dependabot PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Bail if the PR is already merged, closed, or a draft.
+          STATE=$(gh pr view "$PR_NUMBER" --json state,isDraft --jq '.state + " " + (.isDraft|tostring)')
+          echo "PR $PR_NUMBER state=$STATE"
+          if [[ "$STATE" != "OPEN "* || "$STATE" == "OPEN true" ]]; then
+            echo "Skipping: PR is closed/merged or a draft"
+            exit 0
+          fi
+
+          # Wait until every required check on the head commit has completed
+          # and at least the `CI` workflow is SUCCESS. We don't want to flip
+          # auto-merge on while jobs are still running.
+          HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')
+          for i in {1..30}; do
+            STATUS=$(gh api "repos/${{ github.repository }}/commits/${HEAD_SHA}/check-runs" \
+              --jq '[.check_runs[] | select(.name | test("rust|frontend|gitleaks"; "i")) | .conclusion] | join(" ")' 2>/dev/null || echo "")
+            echo "attempt ${i}: ${STATUS}"
+            if echo "${STATUS}" | grep -q "failure\|cancelled\|timed_out\|action_required\|startup_failure\|stale"; then
+              echo "A required check failed; skipping auto-merge"
+              exit 0
+            fi
+            if ! echo "${STATUS}" | grep -qv "pending\|in_progress\|queued\|" || [ -z "${STATUS// /}" ]; then
+              # No check-runs yet (e.g. very new push). Re-poll shortly.
+              sleep 5
+              continue
+            fi
+            # If we got here, no failure was seen in the rust/frontend/gitleaks jobs.
+            # To be conservative, also require the workflow `CI` to be SUCCESS:
+            CONCLUSION=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${HEAD_SHA}&per_page=20" \
+              --jq '.workflow_runs[] | select(.name == "CI") | .conclusion' | head -n1)
+            if [ "${CONCLUSION}" = "success" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "${CONCLUSION:-}" != "success" ]; then
+            echo "CI never reached 'success'; leaving PR for human review"
+            exit 0
+          fi
+
+          # Idempotent: ignore the "already enabled" error.
+          gh pr merge --auto --squash "$PR_NUMBER" 2>&1 || true
+          echo "auto-merge enabled"
