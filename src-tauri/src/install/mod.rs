@@ -1509,7 +1509,8 @@ mod tests {
 
         let path = home
             .path()
-            .join(".codex/agents")
+            .join(".codex")
+            .join("agents")
             .join("frontend-developer.toml");
         assert!(!path.exists(), "Track must not write the agent file");
         assert_eq!(
@@ -1553,7 +1554,8 @@ mod tests {
         let raw = "---\nname: Frontend Developer\ndescription: Builds UIs.\n---\nBODY\n";
         let conversion_dest = home
             .path()
-            .join(".codex/agents")
+            .join(".codex")
+            .join("agents")
             .join("frontend-developer.toml");
         std::fs::create_dir_all(conversion_dest.parent().unwrap()).unwrap();
         std::fs::write(&conversion_dest, b"OLDER CLI OUTPUT").unwrap();
