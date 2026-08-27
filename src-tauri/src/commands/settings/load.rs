@@ -240,5 +240,5 @@ pub async fn write_raw(app_data_dir: &Path, bytes: &[u8]) -> Result<(), std::io:
 pub async fn read_raw(app_data_dir: &Path) -> Result<Vec<u8>, std::io::Error> {
     read_capped(&settings_path(app_data_dir), MAX_SETTINGS_BYTES)
         .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        .map_err(std::io::Error::other)
 }

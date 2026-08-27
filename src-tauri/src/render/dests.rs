@@ -52,6 +52,24 @@ pub fn dests(
 
     Ok(templates
         .iter()
-        .map(|t| root.join(t.replace("{slug}", slug)))
+        .map(|t| join_template(root, t, slug))
         .collect())
+}
+
+/// Build a `PathBuf` from a destination template by joining each `/`-separated
+/// component onto `root` individually, so the resulting path uses the
+/// platform-native separator (e.g. `\` on Windows). A single
+/// `root.join(".codex/agents/foo.toml")` would embed the `/` as a literal
+/// character in the final component, producing a path that mismatches what
+/// `Path::to_string_lossy()` returns on `Path::join` chains in tests.
+fn join_template(root: &Path, template: &str, slug: &str) -> PathBuf {
+    let expanded = template.replace("{slug}", slug);
+    let mut out = root.to_path_buf();
+    for comp in expanded.split(['/', '\\']) {
+        if comp.is_empty() || comp == "." {
+            continue;
+        }
+        out.push(comp);
+    }
+    out
 }

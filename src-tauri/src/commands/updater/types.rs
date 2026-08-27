@@ -51,6 +51,7 @@ impl UpdateCheckOutcome {
     /// Wire shape tag — used by the frontend to discriminate variants
     /// without `instanceof`. Mirrors the `serde(rename_all = "camelCase")`
     /// on the enum.
+    #[allow(dead_code)] // surfaced through the variant, not called by Rust code
     pub fn kind(&self) -> &'static str {
         match self {
             Self::UpToDate => "upToDate",

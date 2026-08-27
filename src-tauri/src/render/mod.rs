@@ -38,4 +38,5 @@ mod tests;
 pub use dests::dests;
 pub use dispatch::{label, scope_for, supports_project, supports_user};
 pub use helpers::{sha256_hex, slugify};
+#[allow(unused_imports)] // re-exported for downstream callers in install/tests
 pub use output::{output_slug, render, render_with_hash};
