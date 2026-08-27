@@ -38,7 +38,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["process", "io-util", "rt-multi-thread", "macros", "sync", "time"] }
 
 # Error handling
-thiserror = "1"
+thiserror = "2"
 
 # Job IDs and timestamps
 uuid = { version = "1", features = ["v4", "serde"] }
