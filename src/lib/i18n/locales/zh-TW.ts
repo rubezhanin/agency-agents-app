@@ -512,7 +512,7 @@ const zhTW = {
   "updates.checkNow": "立即查看",
   "updates.lastChecked": "最後檢查時間：{time}",
   "updates.offlineHint": "離線模式已開啟 — 手動更新檢查被封鎖。將其關閉上面以檢查清單。",
-  "updates.onlineHint": "取得 agencyagents.app/updater.json 並將已發佈的版本與您正在執行的版本進行比較。沒有發送版本號。",
+  "updates.onlineHint": "取得 agency-agents-app.rubezhanin.app/updater.json 並將已發佈的版本與您正在執行的版本進行比較。沒有發送版本號。",
   "updates.autoCheck": "每日自動檢查",
   "updates.autoCheckHint": "啟用後，Agency Agents 每 24 小時檢查一次清單，並在標題列中顯示通知（如果有新版本可用）。離線模式開啟時自動暫停。",
   "updates.autoInstall": "自動安裝更新",

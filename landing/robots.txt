@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://agencyagents.app/sitemap.xml
+Sitemap: https://agency-agents-app.rubezhanin.app/sitemap.xml

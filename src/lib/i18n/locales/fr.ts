@@ -512,7 +512,7 @@ const fr = {
   "updates.checkNow": "Vérifiez maintenant",
   "updates.lastChecked": "Dernière vérification : {time}",
   "updates.offlineHint": "Le mode hors ligne est activé — les vérifications manuelles des mises à jour sont bloquées. Désactivez-le ci-dessus pour vérifier le manifeste.",
-  "updates.onlineHint": "Récupère agencyagents.app/updater.json et compare la version publiée à celle que vous exécutez. Aucun numéro de version n'est envoyé.",
+  "updates.onlineHint": "Récupère agency-agents-app.rubezhanin.app/updater.json et compare la version publiée à celle que vous exécutez. Aucun numéro de version n'est envoyé.",
   "updates.autoCheck": "Vérification automatique quotidienne",
   "updates.autoCheckHint": "Lorsqu'il est activé, Agency Agents vérifie le manifeste une fois toutes les 24 heures et affiche un avis dans la barre de titre si une version plus récente est disponible. Suspendu automatiquement lorsque le mode hors ligne est activé.",
   "updates.autoInstall": "Installer les mises à jour automatiquement",

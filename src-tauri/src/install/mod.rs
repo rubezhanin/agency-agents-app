@@ -22,8 +22,8 @@ use crate::registry;
 use crate::render;
 use crate::state::AppState;
 use crate::types::{
-    AgentDiff, InstallRecord, InstallState, InstalledAgent, ProjectInfo, Tool, ToolInfo, ToolVersion,
-    UpdateKind,
+    AgentDiff, InstallRecord, InstallState, InstalledAgent, ProjectInfo, Tool, ToolInfo,
+    ToolVersion, UpdateKind,
 };
 use crate::util::fs::{atomic_write, read_capped};
 
@@ -50,9 +50,11 @@ async fn load_ledger(app: &AppHandle) -> Result<Vec<InstallRecord>, AppError> {
 async fn save_ledger(app: &AppHandle, records: &[InstallRecord]) -> Result<(), AppError> {
     let path = ledger_path(app)?;
     if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|e| AppError::Io {
-            message: format!("create state dir {}: {e}", parent.display()),
-        })?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| AppError::Io {
+                message: format!("create state dir {}: {e}", parent.display()),
+            })?;
     }
     let bytes = serde_json::to_vec_pretty(records).map_err(|e| AppError::Io {
         message: format!("serialize installs.json: {e}"),
@@ -168,10 +170,15 @@ async fn backup_if_differs(
     if existing == new_bytes {
         return Ok(()); // identical → not a destructive write
     }
-    tokio::fs::create_dir_all(backup_dir).await.map_err(|e| AppError::Io {
-        message: format!("create backups dir {}: {e}", backup_dir.display()),
-    })?;
-    let fname = dest.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "agent".into());
+    tokio::fs::create_dir_all(backup_dir)
+        .await
+        .map_err(|e| AppError::Io {
+            message: format!("create backups dir {}: {e}", backup_dir.display()),
+        })?;
+    let fname = dest
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "agent".into());
     let backup = backup_dir.join(format!("{fname}.{}.bak", fs_stamp(stamp)));
     atomic_write(&backup, &existing).await
 }
@@ -331,10 +338,10 @@ fn tool_is_dir_unit(tool: &str) -> bool {
     let Some(dest) = meta.dest.as_ref() else {
         return false;
     };
-    dest.user
-        .iter()
-        .chain(dest.project.iter())
-        .any(|t| t.split_once("{slug}").is_some_and(|(_, after)| after.starts_with('/')))
+    dest.user.iter().chain(dest.project.iter()).any(|t| {
+        t.split_once("{slug}")
+            .is_some_and(|(_, after)| after.starts_with('/'))
+    })
 }
 
 /// Back up divergent files, then remove every existing physical destination.
@@ -458,9 +465,11 @@ async fn write_agent_files_to(
             backup_if_differs(dest, bytes.as_bytes(), bdir, installed_at).await?;
         }
         if let Some(parent) = dest.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| AppError::Io {
-                message: format!("create {}: {e}", parent.display()),
-            })?;
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| AppError::Io {
+                    message: format!("create {}: {e}", parent.display()),
+                })?;
         }
         atomic_write(dest, bytes.as_bytes()).await?;
     }
@@ -505,7 +514,12 @@ fn classify(
 /// for `tool`. Pure (no I/O) so it's unit-testable. When they match, the file
 /// on disk IS this agent verbatim — there's nothing to "adopt"; reconcile can
 /// treat it as `Current` even if we didn't install it.
-fn bytes_match_render(agent: &crate::types::Agent, raw: &str, tool: &str, file_bytes: &[u8]) -> bool {
+fn bytes_match_render(
+    agent: &crate::types::Agent,
+    raw: &str,
+    tool: &str,
+    file_bytes: &[u8],
+) -> bool {
     match render::render_with_hash(agent, raw, tool) {
         Ok((_, expected)) => render::sha256_hex(file_bytes) == expected,
         Err(_) => false,
@@ -671,10 +685,7 @@ pub async fn uninstall_agent(
 /// only project roots the ledger still references, so dropped rows don't come
 /// back). Callers that want the files gone use `uninstall_agent` per row first.
 #[tauri::command]
-pub async fn project_forget(
-    app: AppHandle,
-    project_path: String,
-) -> Result<(), AppError> {
+pub async fn project_forget(app: AppHandle, project_path: String) -> Result<(), AppError> {
     let mut ledger = load_ledger(&app).await?;
     prune_project_rows(&mut ledger, &project_path);
     save_ledger(&app, &ledger).await?;
@@ -711,7 +722,12 @@ pub async fn installs_reconcile(
         };
         let centry = corpus.entry(&r.slug);
         let corpus_source = centry.as_ref().map(|e| e.source_hash.as_str());
-        let st = classify(disk_hash.as_deref(), &r.rendered_hash, &r.source_hash, corpus_source);
+        let st = classify(
+            disk_hash.as_deref(),
+            &r.rendered_hash,
+            &r.source_hash,
+            corpus_source,
+        );
         // Cosmetic vs substantive: only meaningful when Outdated. Body unchanged
         // upstream → the update is metadata-only.
         let update_kind = if st == InstallState::Outdated {
@@ -724,7 +740,10 @@ pub async fn installs_reconcile(
         } else {
             None
         };
-        let name = corpus.get(&r.slug).map(|a| a.name).unwrap_or_else(|| r.slug.clone());
+        let name = corpus
+            .get(&r.slug)
+            .map(|a| a.name)
+            .unwrap_or_else(|| r.slug.clone());
         out.push(InstalledAgent {
             slug: r.slug.clone(),
             name,
@@ -780,13 +799,18 @@ pub async fn installs_reconcile(
         // Each entry: (scope-key, agents-root, suffix-after-`{slug}`).
         let mut scan_roots: Vec<(Option<String>, PathBuf, String)> = Vec::new();
         if render::supports_user(tool) {
-            scan_roots
-                .extend(agent_units(tool, &home, None).into_iter().map(|(d, s)| (None, d, s)));
+            scan_roots.extend(
+                agent_units(tool, &home, None)
+                    .into_iter()
+                    .map(|(d, s)| (None, d, s)),
+            );
         }
         if render::supports_project(tool) {
             scan_roots.extend(project_dirs.iter().flat_map(|p| {
                 let key = Some(p.to_string_lossy().to_string());
-                agent_units(tool, &home, Some(p)).into_iter().map(move |(d, s)| (key.clone(), d, s))
+                agent_units(tool, &home, Some(p))
+                    .into_iter()
+                    .map(move |(d, s)| (key.clone(), d, s))
             }));
         }
         for (proj, agents_root, suffix) in scan_roots {
@@ -804,14 +828,22 @@ pub async fn installs_reconcile(
                 // bytes. Dir unit: the entry IS the slug dir, bytes at <dir>/<leaf>.
                 // File unit: the entry is `<slug><suffix>`.
                 let (token, byte_path) = if dir_unit {
-                    (name.to_string(), agents_root.join(name).join(suffix.trim_start_matches('/')))
+                    (
+                        name.to_string(),
+                        agents_root.join(name).join(suffix.trim_start_matches('/')),
+                    )
                 } else if name.ends_with(suffix.as_str()) && name.len() > suffix.len() {
-                    (name[..name.len() - suffix.len()].to_string(), agents_root.join(name))
+                    (
+                        name[..name.len() - suffix.len()].to_string(),
+                        agents_root.join(name),
+                    )
                 } else {
                     continue; // not a unit for this template (stray file/dir)
                 };
                 let cand = token.strip_prefix(prefix).unwrap_or(&token);
-                let Some(agent) = corpus.get(cand).or_else(|| corpus.get_by_conversion_slug(cand))
+                let Some(agent) = corpus
+                    .get(cand)
+                    .or_else(|| corpus.get_by_conversion_slug(cand))
                 else {
                     continue; // unrecognized → not ours to claim
                 };
@@ -1028,12 +1060,12 @@ pub async fn tool_versions() -> Result<Vec<ToolVersion>, AppError> {
     let supported = supported();
     let mut handles = Vec::with_capacity(supported.len());
     for tool in supported {
-        handles.push(tokio::spawn(
-            async move { ToolVersion {
+        handles.push(tokio::spawn(async move {
+            ToolVersion {
                 tool: tool.to_string(),
                 version: probe_version(tool).await,
-            } },
-        ));
+            }
+        }));
     }
     let mut out = Vec::with_capacity(handles.len());
     for h in handles {
@@ -1061,7 +1093,11 @@ pub async fn projects_list(app: AppHandle) -> Result<Vec<ProjectInfo>, AppError>
                 .file_name()
                 .map(|s| s.to_string_lossy().to_string())
                 .unwrap_or_else(|| path.clone());
-            ProjectInfo { path, label, installed_count }
+            ProjectInfo {
+                path,
+                label,
+                installed_count,
+            }
         })
         .collect())
 }
@@ -1100,7 +1136,10 @@ pub async fn loadout_export(app: AppHandle, path: String) -> Result<u32, AppErro
         })
         .collect();
     let n = installs.len() as u32;
-    let af = Agentfile { agentfile: 1, installs };
+    let af = Agentfile {
+        agentfile: 1,
+        installs,
+    };
     let bytes = serde_json::to_vec_pretty(&af).map_err(|e| AppError::Io {
         message: format!("serialize Agentfile: {e}"),
     })?;
@@ -1139,7 +1178,11 @@ mod tests {
         let af = Agentfile {
             agentfile: 1,
             installs: vec![
-                LoadoutEntry { slug: "a".into(), tool: "claudeCode".to_string(), project_path: None },
+                LoadoutEntry {
+                    slug: "a".into(),
+                    tool: "claudeCode".to_string(),
+                    project_path: None,
+                },
                 LoadoutEntry {
                     slug: "b".into(),
                     tool: "cursor".to_string(),
@@ -1182,11 +1225,15 @@ mod tests {
         prune_project_rows(&mut ledger, "/p1");
         // Both /p1 rows gone; the other project + the global row survive.
         assert_eq!(ledger.len(), 2);
-        assert!(ledger.iter().all(|r| r.project_path.as_deref() != Some("/p1")));
+        assert!(ledger
+            .iter()
+            .all(|r| r.project_path.as_deref() != Some("/p1")));
         assert!(ledger
             .iter()
             .any(|r| r.slug == "c" && r.project_path.as_deref() == Some("/p2")));
-        assert!(ledger.iter().any(|r| r.slug == "d" && r.project_path.is_none()));
+        assert!(ledger
+            .iter()
+            .any(|r| r.slug == "d" && r.project_path.is_none()));
 
         // Forgetting an unknown project changes nothing.
         prune_project_rows(&mut ledger, "/nope");
@@ -1198,11 +1245,20 @@ mod tests {
         // file gone
         assert_eq!(classify(None, "r", "s1", Some("s1")), InstallState::Removed);
         // bytes differ from what we wrote → user-edited
-        assert_eq!(classify(Some("x"), "r", "s1", Some("s1")), InstallState::Modified);
+        assert_eq!(
+            classify(Some("x"), "r", "s1", Some("s1")),
+            InstallState::Modified
+        );
         // matches our render, corpus unchanged → current
-        assert_eq!(classify(Some("r"), "r", "s1", Some("s1")), InstallState::Current);
+        assert_eq!(
+            classify(Some("r"), "r", "s1", Some("s1")),
+            InstallState::Current
+        );
         // matches our render, corpus advanced → outdated
-        assert_eq!(classify(Some("r"), "r", "s1", Some("s2")), InstallState::Outdated);
+        assert_eq!(
+            classify(Some("r"), "r", "s1", Some("s2")),
+            InstallState::Outdated
+        );
         // agent gone from corpus but file intact → current
         assert_eq!(classify(Some("r"), "r", "s1", None), InstallState::Current);
     }
@@ -1213,14 +1269,26 @@ mod tests {
         let os = Path::new("/Users/me");
         let mut tp: HashMap<String, String> = HashMap::new();
         // No entry → OS home.
-        assert_eq!(resolve_tool_base(&tp, "claudeCode", os), PathBuf::from("/Users/me"));
+        assert_eq!(
+            resolve_tool_base(&tp, "claudeCode", os),
+            PathBuf::from("/Users/me")
+        );
         // Empty entry is treated as unset → OS home.
         tp.insert("claudeCode".into(), String::new());
-        assert_eq!(resolve_tool_base(&tp, "claudeCode", os), PathBuf::from("/Users/me"));
+        assert_eq!(
+            resolve_tool_base(&tp, "claudeCode", os),
+            PathBuf::from("/Users/me")
+        );
         // Non-empty override wins, and ONLY for that tool.
         tp.insert("claudeCode".into(), "/wsl/home/me".into());
-        assert_eq!(resolve_tool_base(&tp, "claudeCode", os), PathBuf::from("/wsl/home/me"));
-        assert_eq!(resolve_tool_base(&tp, "codex", os), PathBuf::from("/Users/me"));
+        assert_eq!(
+            resolve_tool_base(&tp, "claudeCode", os),
+            PathBuf::from("/wsl/home/me")
+        );
+        assert_eq!(
+            resolve_tool_base(&tp, "codex", os),
+            PathBuf::from("/Users/me")
+        );
     }
 
     #[test]
@@ -1229,14 +1297,20 @@ mod tests {
         // File-per-agent (Claude): root = ~/.claude/agents, suffix = ".md".
         let claude = agent_units("claudeCode", home, None);
         assert!(
-            claude.iter().any(|(d, s)| d.ends_with(".claude/agents") && s == ".md"),
+            claude
+                .iter()
+                .any(|(d, s)| d.ends_with(".claude/agents") && s == ".md"),
             "claude: {claude:?}"
         );
         // Dir-per-agent (Osaurus): the bug was scanning `.osaurus/skills/_probe`.
         // It must scan `.osaurus/skills` with a `/SKILL.md` leaf.
         let osa = agent_units("osaurus", home, None);
         assert_eq!(osa.len(), 1, "osaurus: {osa:?}");
-        assert!(osa[0].0.ends_with(".osaurus/skills"), "osaurus dir: {:?}", osa[0].0);
+        assert!(
+            osa[0].0.ends_with(".osaurus/skills"),
+            "osaurus dir: {:?}",
+            osa[0].0
+        );
         assert_eq!(osa[0].1, "/SKILL.md");
     }
 
@@ -1262,34 +1336,68 @@ mod tests {
 
         // Codex (user-scoped, TOML transform).
         let rec = write_agent_files(
-            &agent, raw, "codex", home.path(), None, None, "src-1", "body-1", "v1",
+            &agent,
+            raw,
+            "codex",
+            home.path(),
+            None,
+            None,
+            "src-1",
+            "body-1",
+            "v1",
             "2026-06-05T00:00:00Z",
         )
         .await
         .unwrap();
 
-        let path = home.path().join(".codex").join("agents").join("frontend-developer.toml");
+        let path = home
+            .path()
+            .join(".codex")
+            .join("agents")
+            .join("frontend-developer.toml");
         assert!(path.exists(), "install wrote the file");
         let on_disk = std::fs::read(&path).unwrap();
         let disk_hash = render::sha256_hex(&on_disk);
-        assert_eq!(disk_hash, rec.rendered_hash, "on-disk bytes match recorded render");
+        assert_eq!(
+            disk_hash, rec.rendered_hash,
+            "on-disk bytes match recorded render"
+        );
 
         // Reconcile classifications off the real bytes:
         assert_eq!(
-            classify(Some(&disk_hash), &rec.rendered_hash, &rec.source_hash, Some("src-1")),
+            classify(
+                Some(&disk_hash),
+                &rec.rendered_hash,
+                &rec.source_hash,
+                Some("src-1")
+            ),
             InstallState::Current
         );
         assert_eq!(
-            classify(Some(&disk_hash), &rec.rendered_hash, &rec.source_hash, Some("src-2")),
+            classify(
+                Some(&disk_hash),
+                &rec.rendered_hash,
+                &rec.source_hash,
+                Some("src-2")
+            ),
             InstallState::Outdated
         );
         assert_eq!(
-            classify(Some("useredited"), &rec.rendered_hash, &rec.source_hash, Some("src-1")),
+            classify(
+                Some("useredited"),
+                &rec.rendered_hash,
+                &rec.source_hash,
+                Some("src-1")
+            ),
             InstallState::Modified
         );
         // delete → Removed
         std::fs::remove_file(&path).unwrap();
-        let gone = if path.exists() { Some(disk_hash.as_str()) } else { None };
+        let gone = if path.exists() {
+            Some(disk_hash.as_str())
+        } else {
+            None
+        };
         assert_eq!(
             classify(gone, &rec.rendered_hash, &rec.source_hash, Some("src-1")),
             InstallState::Removed
@@ -1301,11 +1409,21 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let raw = "---\nname: Frontend Developer\ncolor: blue\n---\nVERBATIM BODY\n";
         write_agent_files(
-            &sample_agent(), raw, "claudeCode", home.path(), None, None, "s", "b", "v", "t",
+            &sample_agent(),
+            raw,
+            "claudeCode",
+            home.path(),
+            None,
+            None,
+            "s",
+            "b",
+            "v",
+            "t",
         )
         .await
         .unwrap();
-        let got = std::fs::read_to_string(home.path().join(".claude/agents/frontend-developer.md")).unwrap();
+        let got = std::fs::read_to_string(home.path().join(".claude/agents/frontend-developer.md"))
+            .unwrap();
         assert_eq!(got, raw, "identity tool ships the source unchanged");
     }
 
@@ -1314,12 +1432,27 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let proj = tempfile::tempdir().unwrap();
         let rec = write_agent_files(
-            &sample_agent(), "raw", "cursor", home.path(), Some(proj.path()), None, "s", "b", "v", "t",
+            &sample_agent(),
+            "raw",
+            "cursor",
+            home.path(),
+            Some(proj.path()),
+            None,
+            "s",
+            "b",
+            "v",
+            "t",
         )
         .await
         .unwrap();
-        assert!(proj.path().join(".cursor/rules/frontend-developer.mdc").exists());
-        assert_eq!(rec.project_path.as_deref(), Some(proj.path().to_string_lossy().as_ref()));
+        assert!(proj
+            .path()
+            .join(".cursor/rules/frontend-developer.mdc")
+            .exists());
+        assert_eq!(
+            rec.project_path.as_deref(),
+            Some(proj.path().to_string_lossy().as_ref())
+        );
         assert_eq!(rec.scope, crate::types::Scope::Project);
     }
 
@@ -1331,12 +1464,27 @@ mod tests {
         let raw = "---\nname: Frontend Developer\ncolor: blue\n---\nBODY\n";
         // The exact canonical render matches…
         let (rendered, _h) = render::render_with_hash(&agent, raw, "codex").unwrap();
-        assert!(bytes_match_render(&agent, raw, "codex", rendered.as_bytes()));
+        assert!(bytes_match_render(
+            &agent,
+            raw,
+            "codex",
+            rendered.as_bytes()
+        ));
         // …a hand-edited / different file does not.
-        assert!(!bytes_match_render(&agent, raw, "codex", b"different bytes"));
+        assert!(!bytes_match_render(
+            &agent,
+            raw,
+            "codex",
+            b"different bytes"
+        ));
         // Identity tool (claude-code ships the source verbatim) also matches.
         let (raw_render, _h2) = render::render_with_hash(&agent, raw, "claudeCode").unwrap();
-        assert!(bytes_match_render(&agent, raw, "claudeCode", raw_render.as_bytes()));
+        assert!(bytes_match_render(
+            &agent,
+            raw,
+            "claudeCode",
+            raw_render.as_bytes()
+        ));
     }
 
     /// Track records provenance but must NOT create or touch any file.
@@ -1347,26 +1495,50 @@ mod tests {
         let raw = "---\nname: Frontend Developer\n---\nBODY\n";
 
         let rec = track_agent_record(
-            &agent, raw, "codex", home.path(), None, "src-1", "body-1", "v1",
+            &agent,
+            raw,
+            "codex",
+            home.path(),
+            None,
+            "src-1",
+            "body-1",
+            "v1",
             "2026-06-06T00:00:00Z",
         )
         .unwrap();
 
-        let path = home.path().join(".codex/agents").join("frontend-developer.toml");
+        let path = home
+            .path()
+            .join(".codex/agents")
+            .join("frontend-developer.toml");
         assert!(!path.exists(), "Track must not write the agent file");
-        assert_eq!(rec.dest, path.to_string_lossy(), "record points at the canonical dest");
+        assert_eq!(
+            rec.dest,
+            path.to_string_lossy(),
+            "record points at the canonical dest"
+        );
 
         // The recorded rendered_hash equals a real render — so if the user's file
         // happens to match it, reconcile yields Current; otherwise Modified.
         let (_b, render_hash) = render::render_with_hash(&agent, raw, "codex").unwrap();
         assert_eq!(rec.rendered_hash, render_hash);
         assert_eq!(
-            classify(Some(&render_hash), &rec.rendered_hash, &rec.source_hash, Some("src-1")),
+            classify(
+                Some(&render_hash),
+                &rec.rendered_hash,
+                &rec.source_hash,
+                Some("src-1")
+            ),
             InstallState::Current,
             "a tracked file that matches the canonical render reconciles as Current"
         );
         assert_eq!(
-            classify(Some("hand-edited"), &rec.rendered_hash, &rec.source_hash, Some("src-1")),
+            classify(
+                Some("hand-edited"),
+                &rec.rendered_hash,
+                &rec.source_hash,
+                Some("src-1")
+            ),
             InstallState::Modified,
             "a tracked file that differs reconciles as Modified (never silently clobbered)"
         );
@@ -1379,7 +1551,10 @@ mod tests {
         let mut agent = sample_agent();
         agent.slug = "engineering-frontend-developer".into();
         let raw = "---\nname: Frontend Developer\ndescription: Builds UIs.\n---\nBODY\n";
-        let conversion_dest = home.path().join(".codex/agents").join("frontend-developer.toml");
+        let conversion_dest = home
+            .path()
+            .join(".codex/agents")
+            .join("frontend-developer.toml");
         std::fs::create_dir_all(conversion_dest.parent().unwrap()).unwrap();
         std::fs::write(&conversion_dest, b"OLDER CLI OUTPUT").unwrap();
 
@@ -1441,8 +1616,16 @@ mod tests {
 
         // Update over it (with backups enabled).
         write_agent_files(
-            &agent, "---\nname: Frontend Developer\n---\nNEW\n", "codex", home.path(),
-            None, Some(backups.path()), "src-2", "body-2", "v2", "2026-06-06T01:02:03Z",
+            &agent,
+            "---\nname: Frontend Developer\n---\nNEW\n",
+            "codex",
+            home.path(),
+            None,
+            Some(backups.path()),
+            "src-2",
+            "body-2",
+            "v2",
+            "2026-06-06T01:02:03Z",
         )
         .await
         .unwrap();
@@ -1454,13 +1637,24 @@ mod tests {
             .map(|e| std::fs::read(e.path()).unwrap())
             .collect();
         assert_eq!(saved.len(), 1, "exactly one backup created");
-        assert_eq!(saved[0], b"USER EDITED CONTENT", "backup holds the pre-overwrite bytes");
+        assert_eq!(
+            saved[0], b"USER EDITED CONTENT",
+            "backup holds the pre-overwrite bytes"
+        );
 
         // A second, byte-identical write makes no new backup (not destructive).
         let before = std::fs::read(&dest).unwrap();
         write_agent_files(
-            &agent, "---\nname: Frontend Developer\n---\nNEW\n", "codex", home.path(),
-            None, Some(backups.path()), "src-2", "body-2", "v2", "2026-06-06T02:02:03Z",
+            &agent,
+            "---\nname: Frontend Developer\n---\nNEW\n",
+            "codex",
+            home.path(),
+            None,
+            Some(backups.path()),
+            "src-2",
+            "body-2",
+            "v2",
+            "2026-06-06T02:02:03Z",
         )
         .await
         .unwrap();
@@ -1608,7 +1802,10 @@ mod tests {
             for dest in &dests {
                 assert!(!dest.exists(), "{tool}: SKILL.md still present at {dest:?}");
                 let slug_dir = dest.parent().unwrap();
-                assert!(!slug_dir.exists(), "{tool}: orphaned skill dir left at {slug_dir:?}");
+                assert!(
+                    !slug_dir.exists(),
+                    "{tool}: orphaned skill dir left at {slug_dir:?}"
+                );
             }
         }
     }
@@ -1625,20 +1822,18 @@ mod tests {
         std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
         std::fs::write(&dest, b"USER MODIFIED").unwrap();
 
-        assert!(
-            remove_agent_files(
-                &agent,
-                raw,
-                "codex",
-                home.path(),
-                None,
-                None,
-                &backup_path,
-                "2026-06-12T00:00:00Z",
-            )
-            .await
-            .is_err()
-        );
+        assert!(remove_agent_files(
+            &agent,
+            raw,
+            "codex",
+            home.path(),
+            None,
+            None,
+            &backup_path,
+            "2026-06-12T00:00:00Z",
+        )
+        .await
+        .is_err());
         assert_eq!(std::fs::read(&dest).unwrap(), b"USER MODIFIED");
     }
 

@@ -1,8 +1,8 @@
 # Agency Agents App Plan
 
 **Product:** Agency Agents  
-**Repo:** `github:msitarzewski/agency-agents-app`  
-**Catalog:** `github:msitarzewski/agency-agents`  
+**Repo:** `github:rubezhanin/agency-agents-app`  
+**Catalog:** `github:rubezhanin/agency-agents`  
 **Stack:** Tauri 2, Rust, SvelteKit, Svelte 5, TypeScript  
 **License:** MIT
 
@@ -134,7 +134,7 @@ Tracked inventory for the release after v0.2.0. Grouped by what unblocks each it
 
 The updater UI, store, plugin, dedicated signing key, and publish tooling all ship.
 
-1. **Endpoint — activated at the v0.2.0 release cut** (no longer post-0.2.0): host is `agencyagents.app`
+1. **Endpoint — activated at the v0.2.0 release cut** (no longer post-0.2.0): host is `agency-agents-app.rubezhanin.app`
    (Caddy on umbp from `~/Sites/agency-agents/`), the v0.2.0 build runs without `SKIP_UPDATER`, and
    `publish-manifest.sh` rsyncs the signed manifest there. Resolved in `decisions.md` (2026-06-22).
 2. **Opt-in automatic install** *(remaining)* — today the live path is check → notify → one-click Install;
@@ -199,3 +199,82 @@ cargo test --manifest-path src-tauri/Cargo.toml upstream_convert_sh_is_byte_iden
 - macOS signed build is verified
 - Windows/Linux builds are produced or explicitly marked unavailable
 - Memory Bank task docs are updated after human approval
+
+## v1.0 Roadmap (post-0.4.0)
+
+Driven by the four technical reviews (see `docs/REVIEW-*.md` if present, or the four
+attached TZs in the v0.4.0 milestone). Every item below is a single, reviewable PR.
+
+### A. Foundation & Branding ✅ done in 0.4.0
+
+- Re-brand to `rubezhanin/agency-agents-app` (bundle id, author, updater host, FUNDING, README).
+- Drop macOS-only artefacts that don't make sense in a cross-platform fork (Liquid Glass icon source remains as a doc reference).
+- Hermes plugin declared in `tools.json` (`hermes`, `installKind: "plugin"`).
+
+### B. Hermes plugin (full)
+
+- Rust renderer `src-tauri/src/render/hermes.rs` producing a directory per **[HERMES-PLUGIN.md](./HERMES-PLUGIN.md)**.
+- CLI surface in the app: "Install as Hermes plugin" / "Stage for `hermes plugin install`…".
+- Reconciliation: ledger records the plugin as one install with N child hashes; classify as `current | outdated | modified | removed | foreign`.
+- UI: `DeploymentMatrix` shows a Hermes button for every persona; the modal renders the directory and offers install/remove/update.
+- Tests: renderer fixture, schema validation, index sync, reconciliation states.
+
+### C. CI/CD (cross-platform)
+
+- New `ci.yml` — runs on every push and PR: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test --lib`, `npm run check`, `npm run build`. Three runners (ubuntu, windows, macos).
+- New `macos-build.yml` — release builds for `darwin-aarch64` + `darwin-x86_64`, signed + notarized.
+- Coverage: `cargo-llvm-cov` → Codecov; minimum gate 70% on the Rust lib.
+- Dependabot: weekly for npm and Cargo.
+- Pre-commit: `gitleaks` for secret scanning; `prettier --check` for TS/Svelte.
+
+### D. Architecture (decompose god modules)
+
+Goal: every Rust file ≤ 15 KB, every Svelte component ≤ 10 KB. Public IPC unchanged.
+
+| Current (KB) | New modules |
+|--------------|-------------|
+| `corpus/mod.rs` 85 | `corpus/{parser, indexer, git, cache, updater, runbooks}.rs` |
+| `install/mod.rs` 66 | `install/{manager, ledger, reconciler, diff, backup, bulk, sandbox}.rs` |
+| `commands/updater.rs` 51 | `updater/{checker, downloader, verifier, scheduler}.rs` |
+| `commands/settings.rs` 47 | `settings/{model, validator, migrator, repository}.rs` |
+| `ui.svelte.ts` 22 | `stores/{nav, theme, modal, layout, history}.ts` |
+| `AgentsWorkspace.svelte` 35 | `components/agents/{Catalog, Filter, Detail, Actions}.svelte` |
+| `ToolsView.svelte` 40 | `components/tools/{List, Detail, BulkActions, VersionBadge}.svelte` |
+
+Also: introduce a thin `domain` layer (no Tauri, no tokio) and an `application` layer (use cases), so logic is testable without the Tauri runtime.
+
+### E. Features (the long tail)
+
+- **Event-driven sync** — backend emits `ledger-updated` / `install-progress`; frontend listens and applies optimistic updates. No more poll-after-invoke.
+- **Pre-flight agent validation** — regex scan (`rm -rf`, `curl | sh`, `sudo`, reads of `.env`); flag as "High Risk" and require explicit Acknowledge.
+- **Schema migrations** — every JSON file (settings, ledger, tools.json cache) carries a `schema_version`; chain migrations run on load.
+- **Path sandbox** — `fs::sandbox::resolve_safe_path(root, input)` rejects any path whose canonical form escapes the root. Wire into every install/import/export/backup entry point.
+- **Virtual scrolling** — `svelte-virtual-list` for the agent catalog and tools list (>50 items).
+- **a11y** — focus trap in modals, `role=listbox` in command palette, full keyboard nav, ARIA labels on every icon button, color contrast ≥ 4.5:1, `axe-core` in CI.
+- **Structured logging on frontend** — replace `catch { /* ignore */ }` with a `logError('event', ctx)` call into a local file.
+- **Rust ↔ TS type generation** — `ts-rs` or a proc-macro that emits `src/lib/types.generated.ts` from `src-tauri/src/types.rs`; CI fails if drift is detected.
+- **Rollback / Time machine** — UI timeline of an agent's history; "Rollback to v1.2" restores from `~/.agency-agents/backups/`.
+- **Beta release channel** — `prerelease` flag in `updater.json`; opt-in toggle in Settings.
+- **Coverage report** — Codecov badge in README.
+
+### F. Tooling & DX
+
+- `cargo-deny` (licenses + advisories) wired into CI; `deny.toml` strict on copyleft.
+- `cargo audit` + `npm audit` weekly.
+- `rust-toolchain.toml` pinning stable + components (clippy, rustfmt).
+- Conventional commits + `release-please` to cut releases automatically.
+- ADR (Architecture Decision Records) in `docs/adr/` for every major choice.
+
+### v1.0 Definition of Done (additive to the 0.x list above)
+
+- [ ] Hermes plugin is installable and reconciled as documented in HERMES-PLUGIN.md.
+- [ ] CI is green on ubuntu + windows + macos on every PR.
+- [ ] Coverage ≥ 70% on `src-tauri/src/`, ≥ 60% on `src/lib/stores/`.
+- [ ] No file > 15 KB in `src-tauri/src/`, no Svelte file > 10 KB in `src/lib/components/`.
+- [ ] Every persisted JSON has a `schema_version` and migrator.
+- [ ] axe-core CI run passes on every PR.
+- [ ] Zero `catch { /* ignore */ }` without a `logError(...)` call.
+- [ ] `cargo clippy -- -D warnings` and `cargo fmt --check` are required checks.
+- [ ] `HERMES-PLUGIN.md` and `docs/HERMES-PLUGIN.md` exist and the schema validator passes against them.
+- [ ] Beta channel toggle works end-to-end (manifest → updater → install).
+- [ ] At least one migration has been tested by introducing a fake v0.4 ledger and observing it upgrade to v1.0 in CI.

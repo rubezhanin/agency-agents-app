@@ -27,7 +27,7 @@ import {
 import { safeOpenUrl } from "$lib/util/url";
 
 const REPO_NEW_ISSUE_URL =
-  "https://github.com/msitarzewski/agency-agents-app/issues/new";
+  "https://github.com/rubezhanin/agency-agents-app/issues/new";
 
 /** Cap on the stderr excerpt we include in the pre-filled body. Keeps
  *  the resulting URL well under GitHub's ~8 KiB limit even with the

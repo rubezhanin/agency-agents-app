@@ -1,0 +1,100 @@
+# CI — pull-request gates for every push and PR.
+#
+# Goals:
+# - Reject PRs that break fmt, clippy, the Rust test suite, svelte-check, or the
+#   Svelte build.
+# - Run on every supported host (ubuntu, windows, macos) so a Windows-only or
+#   macOS-only regression is caught before merge.
+# - Stay under 10 minutes end-to-end. The Rust toolchain cache keeps repeated
+#   runs well under that, and the npm cache does the same for the frontend.
+#
+# This file replaces the historical `linux-build.yml` and `windows-build.yml`
+# as the *gate* — the release builds live in `macos-build.yml`,
+# `linux-build.yml`, and `windows-build.yml` and only fire on tags.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs of the same ref when a new commit lands.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Pull requests from forks do not have write access; the `pull_request` event
+  # runs with the *base* repo's token when the workflow is defined there.
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Rust — fmt + clippy + test (gated)
+  # ---------------------------------------------------------------------------
+  rust:
+    name: rust (fmt + clippy + test) — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - name: cargo fmt --check
+        run: cargo fmt --check --manifest-path src-tauri/Cargo.toml --all -- --check
+      - name: cargo clippy
+        # `-D warnings` is a stretch goal. The codebase has 13 historical
+        # warnings (mostly doc-comment style + one upstream `too_many_arguments`
+        # on `install::remove_agent_files`); we want clippy to run and surface
+        # new regressions, but we don't want every PR to fail on day one.
+        # We track the cleanup in `docs/PLAN.md` and flip the deny bit back
+        # on once the warning count is zero.
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings -A clippy::doc_overindented_list_items -A clippy::doc_lazy_continuation -A clippy::derivable_impls -A clippy::too_many_arguments -A clippy::declare_interior_mutable_const -A clippy::borrow_interior_mutable_const
+      - name: cargo test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+  # ---------------------------------------------------------------------------
+  # Frontend — svelte-check + build
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: frontend (check + build) — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: svelte-check
+        run: npm run check
+      - name: vite build
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Gitleaks — keep secrets out of the diff
+  # ---------------------------------------------------------------------------
+  secrets:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

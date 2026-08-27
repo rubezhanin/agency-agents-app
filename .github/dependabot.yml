@@ -1,0 +1,46 @@
+# Dependabot — weekly PRs for npm + Cargo, monthly for the GitHub Actions
+# ecosystem. Bumps are *suggestions*; the CI gate (fmt/clippy/test/build) is
+# the only thing that decides whether they merge.
+
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "npm"
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "cargo"
+    directory: "/src-tauri"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "rust"
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels:
+      - "deps"
+      - "ci"
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]

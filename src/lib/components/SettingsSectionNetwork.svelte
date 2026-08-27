@@ -52,7 +52,7 @@
         allowed: !paranoid,
       },
       {
-        label: "agencyagents.app",
+        label: "agency-agents-app.rubezhanin.app",
         desc: i18n.t("network.updaterDesc"),
         allowed: !paranoid,
       },

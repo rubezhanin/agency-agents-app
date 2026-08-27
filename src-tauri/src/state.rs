@@ -18,7 +18,7 @@ use crate::error::AppError;
 /// Shared application state. Registered via `Builder::manage()`.
 pub struct AppState {
     /// Resolved app-data root — the OS-canonical
-    /// `~/Library/Application Support/com.zerologic.agency-agents-app/` directory. The
+    /// `~/Library/Application Support/app.rubezhanin.agency-agents-app/` directory. The
     /// corpus, install ledger, github cache, and settings file all
     /// derive their paths from this; the security gates that check "is
     /// this path inside our app data dir?" anchor on it too.
@@ -115,7 +115,7 @@ impl AppState {
 }
 
 /// Resolve the canonical app-data root:
-/// `~/Library/Application Support/com.zerologic.agency-agents-app/`. The corpus, install
+/// `~/Library/Application Support/app.rubezhanin.agency-agents-app/`. The corpus, install
 /// ledger, github cache, and settings file all derive their paths from
 /// this; the security gates that check "is this path inside our app data
 /// dir?" anchor on it too.
@@ -123,7 +123,7 @@ fn resolve_app_data_dir() -> Result<PathBuf, AppError> {
     let mut base = dirs::data_dir().ok_or_else(|| AppError::Internal {
         message: "could not resolve OS data dir".into(),
     })?;
-    base.push("com.zerologic.agency-agents-app");
+    base.push("app.rubezhanin.agency-agents-app");
     Ok(base)
 }
 
@@ -216,7 +216,11 @@ mod tests {
             message: "x".into(),
         })
         .await;
-        for feat in ["trending_fetch", "cask_icon_from_homepage", "catalog_refresh"] {
+        for feat in [
+            "trending_fetch",
+            "cask_icon_from_homepage",
+            "catalog_refresh",
+        ] {
             let r = state.require_network(feat).await;
             match r {
                 Err(AppError::ParanoidModeBlocked { feature }) => {
@@ -226,5 +230,4 @@ mod tests {
             }
         }
     }
-
 }

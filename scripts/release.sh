@@ -12,12 +12,12 @@
 #    Then store it in the Keychain:
 #
 #       security add-generic-password \
-#         -a "msitarzewski@mac.com" -s "agency-agents-notary" -U -w
+#         -a "noreply@rubezhanin.app" -s "agency-agents-notary" -U -w
 #       # (paste the app-specific password when prompted)
 #
 #    Optional sanity check that the password actually works with Apple:
 #       xcrun notarytool store-credentials "agency-agents" \
-#         --apple-id "msitarzewski@mac.com" --team-id "7JQGQ7CRH8" \
+#         --apple-id "noreply@rubezhanin.app" --team-id "TBD-APPLE-TEAM-ID" \
 #         --password "<app-specific-password>"
 #
 # 2. Tauri updater signing key (minisign — signs the auto-update artifacts so
@@ -32,8 +32,8 @@
 set -euo pipefail
 
 # Non-secret identifiers (safe to keep in the script).
-export APPLE_ID="msitarzewski@mac.com"
-export APPLE_TEAM_ID="7JQGQ7CRH8"   # from "Developer ID Application: … (7JQGQ7CRH8)"
+export APPLE_ID="noreply@rubezhanin.app"
+export APPLE_TEAM_ID="TBD-APPLE-TEAM-ID"   # from "Developer ID Application: … (TBD-APPLE-TEAM-ID)"
 
 NOTARY_SERVICE="agency-agents-notary"
 UPDATER_KEY_SERVICE="agency-agents-updater-key"

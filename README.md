@@ -1,13 +1,16 @@
 # Agency Agents
 
-> A native installer for AI agents.
+> A cross-platform, multilingual installer for AI agents. Hermes-aware.
+> Maintained by [Yuri Shvets](https://github.com/rubezhanin).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Built with Tauri 2](https://img.shields.io/badge/Built%20with-Tauri%202-orange)](https://tauri.app)
-[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-lightgrey)](https://www.apple.com/macos)
-[![Sponsor](https://img.shields.io/badge/♥-Sponsor-EC4899?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/msitarzewski)
+[![Cross-platform](https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-3A3A3A)](#install)
+[![11 locales](https://img.shields.io/badge/i18n-11%20locales-blue)](#features)
+[![Hermes-ready](https://img.shields.io/badge/Hermes-plugin%20ready-7C3AED)](#supported-install-targets)
+[![Sponsor](https://img.shields.io/badge/♥-Sponsor-EC4899?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/rubezhanin)
 
-Agency Agents is a small, native app for browsing, installing, and tracking the agent personas from [`msitarzewski/agency-agents`](https://github.com/msitarzewski/agency-agents) across the AI coding tools you actually use.
+Agency Agents is a small, native app for browsing, installing, and tracking the agent personas from [`rubezhanin/agency-agents`](https://github.com/rubezhanin/agency-agents) across the AI coding tools you actually use.
 
 It is full source, MIT-licensed, local-first, and does not run telemetry.
 
@@ -47,23 +50,28 @@ Agency Agents is organized around four pillars — **Agents** (who), **Tools** (
 - **GitHub integration** — optional OAuth Device Flow for GitHub-backed app features. Tokens are stored in the platform keychain and are never returned to the frontend.
 - **Offline-first catalog** — ships with a bundled corpus baseline and can use a local or managed clone of `agency-agents`.
 - **Cross-platform shell** — Tauri 2 + Svelte 5 frontend with native macOS chrome and opaque native windows on Windows/Linux.
+- **Multilingual UI** — 11 built-in locales: `en`, `de`, `es`, `fa`, `fr`, `ja`, `ko`, `pt-BR`, `ru`, `zh-CN`, `zh-TW`. Switch in Settings → Appearance; all categories, runbooks, and update banners are localized. New translations are contributed under `src/lib/i18n/locales/`.
+- **Hermes-aware** — ships a full plugin-style installer for the `hermes` CLI (see *Supported Install Targets* below).
 
 New to directing agents? See **[docs/USING-AGENTS.md](./docs/USING-AGENTS.md)** — the Playbook: how to get shipped, tested work out of the catalog (also in-app via the title-bar book icon).
 
 ## Supported Install Targets
 
-The app currently installs to the renderer-backed targets that have deterministic byte parity with the upstream `agency-agents` converter:
+The app currently installs to the renderer-backed targets that have deterministic byte parity with the upstream `agency-agents` converter, plus a first-class Hermes plugin target:
 
-| Tool | Scope Today | Output |
-|------|-------------|--------|
-| Claude Code | user | `~/.claude/agents/*.md` |
-| Codex | user | `~/.codex/agents/*.toml` |
-| Gemini CLI | user | `~/.gemini/agents/*.md` |
-| GitHub Copilot | user | `~/.github/agents/*.md` and `~/.copilot/agents/*.md` |
-| Qwen Code | user | `~/.qwen/agents/*.md` |
-| Cursor | project | `.cursor/rules/*.mdc` |
-| opencode | project | `.opencode/agents/*.md` |
-| Osaurus | user | `~/.osaurus/skills/agency-<slug>/SKILL.md` |
+| Tool | Scope Today | Output | Kind |
+|------|-------------|--------|------|
+| Claude Code | user | `~/.claude/agents/*.md` | per-agent |
+| Codex | user | `~/.codex/agents/*.toml` | per-agent |
+| Gemini CLI | user | `~/.gemini/agents/*.md` | per-agent |
+| GitHub Copilot | user | `~/.github/agents/*.md` and `~/.copilot/agents/*.md` | per-agent |
+| Qwen Code | user | `~/.qwen/agents/*.md` | per-agent |
+| Cursor | project | `.cursor/rules/*.mdc` | per-agent |
+| opencode | project | `.opencode/agents/*.md` | per-agent |
+| Osaurus | user | `~/.osaurus/skills/agency-<slug>/SKILL.md` | per-agent |
+| **Hermes** | user | `~/.hermes/plugins/agency-agents-router/` | **plugin** (full) |
+
+**Hermes** is a special case: it ships as a *plugin* (a `agency-agents-router` directory with `manifest.yaml` and skill files), so the app's renderer for it is a directory-producer instead of a single-file renderer. The user installs the plugin either directly (we copy the directory to `~/.hermes/plugins/`) or via the `hermes` CLI (`hermes plugin install …`). See **[docs/HERMES-PLUGIN.md](./docs/HERMES-PLUGIN.md)** for the manifest schema and reconciliation rules.
 
 The upstream AA repo also contains integrations for Antigravity, Aider, Windsurf, OpenClaw, and Kimi. Those output shapes need additional app work before they should be exposed as first-class app installs — they appear in the Tools panel as recognized-only.
 
@@ -76,7 +84,7 @@ The upstream AA repo also contains integrations for Antigravity, Aider, Windsurf
 
 ## Install
 
-Grab the build for your platform from the [latest release](https://github.com/msitarzewski/agency-agents-app/releases/latest):
+Grab the build for your platform from the [latest release](https://github.com/rubezhanin/agency-agents-app/releases/latest):
 
 - **macOS** (Apple Silicon & Intel) — signed + notarized `.dmg`, macOS 13+.
 - **Linux** (x86_64) — `.deb`, `.rpm`, or the portable `.AppImage`.
@@ -85,7 +93,7 @@ Grab the build for your platform from the [latest release](https://github.com/ms
 Or on macOS via Homebrew:
 
 ```sh
-brew tap msitarzewski/agency-agents
+brew tap rubezhanin/agency-agents
 brew install --cask agency-agents
 ```
 
@@ -110,7 +118,7 @@ Prerequisites:
 Then:
 
 ```sh
-git clone https://github.com/msitarzewski/agency-agents-app
+git clone https://github.com/rubezhanin/agency-agents-app
 cd agency-agents-app
 npm install
 npm run tauri dev
@@ -139,7 +147,7 @@ The catalog comes from `agency-agents`, either as:
 
 - a bundled baseline inside the app
 - a managed local clone at `~/.agency-agents`
-- a user-selected clone, such as `/Users/michael/Software/AgentLand/agency-agents`
+- a user-selected clone, such as `~/agency-agents` or any path on disk
 
 Rendering is native Rust, deterministic, and tested against the upstream `scripts/convert.sh` outputs for the supported transform tools. The app does not shell out to converter scripts at runtime.
 
@@ -190,10 +198,10 @@ The highest-value areas before 1.0 are:
 
 ## Acknowledgments
 
-- [Agency Agents](https://github.com/msitarzewski/agency-agents) — the source catalog and upstream converter/install scripts. The app contributes its transforms back upstream: v0.2.0's Osaurus integration and the shared `tools.json` tool manifest (the twin of `divisions.json`) landed there first.
+- [Agency Agents](https://github.com/rubezhanin/agency-agents) — the source catalog and upstream converter/install scripts. The app contributes its transforms back upstream: v0.2.0's Osaurus integration and the shared `tools.json` tool manifest (the twin of `divisions.json`) landed there first.
 - [Tauri](https://tauri.app) — native app shell without the Electron footprint.
 - [Svelte](https://svelte.dev) — the frontend runtime.
 
 ## Support The Project
 
-If Agency Agents saves you time, consider [sponsoring on GitHub](https://github.com/sponsors/msitarzewski). Sponsorship is optional and does not unlock a paid tier.
+If Agency Agents saves you time, consider [sponsoring on GitHub](https://github.com/sponsors/rubezhanin). Sponsorship is optional and does not unlock a paid tier.

@@ -127,10 +127,10 @@ The exact filename may vary by version and architecture.
 Agency Agents uses `tauri-plugin-updater`. The configured endpoint is:
 
 ```text
-https://agencyagents.app/updater.json
+https://agency-agents-app.rubezhanin.app/updater.json
 ```
 
-Served by Caddy on `umacbookpro` from `~/Sites/agency-agents/` (the `agencyagents.app`
+Served by Caddy on `umacbookpro` from `~/Sites/agency-agents/` (the `agency-agents-app.rubezhanin.app`
 docroot). This is the same Caddy `file_server` box that already serves the live
 `brew-browser.zerologic.com/updater.json` from a sibling vhost — the pattern is proven.
 
@@ -158,7 +158,7 @@ The ordered runbook for cutting a release. The mechanics referenced here are det
 
 - **Version:** `0.1.0` — already set in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`. No bump needed.
 - **Distribution:** signed + notarized `.dmg`, manual download.
-- **Auto-update: deferred.** The updater public key ships, but the endpoint (`agencyagents.app/updater.json`) is not yet provisioned. Build with `SKIP_UPDATER=1` so no updater artifact/manifest is expected. A later release turns auto-update on once the endpoint serves a manifest.
+- **Auto-update: deferred.** The updater public key ships, but the endpoint (`agency-agents-app.rubezhanin.app/updater.json`) is not yet provisioned. Build with `SKIP_UPDATER=1` so no updater artifact/manifest is expected. A later release turns auto-update on once the endpoint serves a manifest.
 - **Out of scope (known limitations, noted in the release notes):** auto-update, multi-file renderers (antigravity / openclaw / aider / windsurf), Windows/Linux runtime verification, and the local-runtime (Ollama / LM Studio) target.
 
 ### Steps
@@ -189,10 +189,10 @@ The ordered runbook for cutting a release. The mechanics referenced here are det
 
 ### Auto-update publishing
 
-Auto-update went live in **v0.2.0** — the manifest at `agencyagents.app/updater.json` covers both Mac
+Auto-update went live in **v0.2.0** — the manifest at `agency-agents-app.rubezhanin.app/updater.json` covers both Mac
 arches. The release-time flow:
 
-1. Hosting is provisioned: Caddy on `umacbookpro` serves `agencyagents.app` from `~/Sites/agency-agents/`,
+1. Hosting is provisioned: Caddy on `umacbookpro` serves `agency-agents-app.rubezhanin.app` from `~/Sites/agency-agents/`,
    so publishing is an `rsync` of `updater.json` into that docroot (mirrors the live `brew-browser` manifest).
 2. The signature uses agency's minisign key (public half embedded in `tauri.conf.json`). `release.sh`
    reads the private key + password from the **Keychain** (`agency-agents-updater-key` / `…-key-pw`) — no

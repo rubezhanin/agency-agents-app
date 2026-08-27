@@ -1,6 +1,6 @@
 # landing
 
-Static landing page for Agency Agents, served at `agencyagents.app` via Caddy on the build host.
+Static landing page for Agency Agents, served at `agency-agents-app.rubezhanin.app` via Caddy on the build host.
 
 Same setup as the brew-browser landing: a self-contained static site (no build step) deployed with `rsync`.
 
@@ -33,12 +33,12 @@ rsync -avz --exclude README.md ./ "$DEPLOY_HOST":Sites/agency-agents/
 > for every user. If you must prune stale landing files, add `--delete` **with**
 > an `--exclude` for `updater.json` and any artifact paths.
 
-Caddy config + DNS (`agencyagents.app`) are managed on the host.
+Caddy config + DNS (`agency-agents-app.rubezhanin.app`) are managed on the host.
 
 ## Update flow
 
 1. Edit `index.html` / `style.css` locally
 2. View locally: `python3 -m http.server -d . 8089` then open `http://localhost:8089`
 3. `rsync` to the host when ready (command above)
-4. Verify the page loads at `https://agencyagents.app/` (and, once auto-update ships,
-   that `curl -s https://agencyagents.app/updater.json` still resolves)
+4. Verify the page loads at `https://agency-agents-app.rubezhanin.app/` (and, once auto-update ships,
+   that `curl -s https://agency-agents-app.rubezhanin.app/updater.json` still resolves)

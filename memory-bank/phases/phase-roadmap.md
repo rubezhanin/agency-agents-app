@@ -43,7 +43,7 @@ all writes explicit/previewed/reversible; source of truth is the user's clone, s
 ## Original phase log
 
 - **Phase 0 — Fork & boot** ✅ DONE (2026-06-05)
-  Forked brew-browser scaffold, rebranded to Agency Agents / `com.zerologic.agency-agents-app`,
+  Forked brew-browser scaffold, rebranded to Agency Agents / `app.rubezhanin.agency-agents-app`,
   green `cargo check` + `vite build`. Brew's real bundled data restored so brew-domain tests stay
   green until that domain retires.
 

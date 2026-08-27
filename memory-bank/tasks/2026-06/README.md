@@ -6,7 +6,7 @@ Agency Agents was forked from brew-browser and stood up this month.
 
 ### 2026-06-05: Phase 0 — Fork & rebrand
 Forked the brew-browser scaffold into `agency-agents-app`, rebranded to "Agency Agents"
-(`com.zerologic.agency-agents-app`). Green `cargo check` + `vite build`.
+(`app.rubezhanin.agency-agents-app`). Green `cargo check` + `vite build`.
 See [260605_phase0-fork-rebrand.md](./260605_phase0-fork-rebrand.md).
 
 ### 2026-06-05: Phase 1 — Corpus + Discover
@@ -46,7 +46,7 @@ See [260615_pre-release-polish.md](./260615_pre-release-polish.md).
 
 ### 2026-06-16: v0.1.0 SHIPPED — public, signed, Homebrew
 First public release: 7 cross-platform artifacts (signed/notarized macOS DMGs, Linux deb/rpm/AppImage, Windows
-NSIS), repo made public, `brew tap msitarzewski/agency-agents`. See agentLog 2026-06-16.
+NSIS), repo made public, `brew tap rubezhanin/agency-agents`. See agentLog 2026-06-16.
 
 ### 2026-06-17→20: v0.1.1 — the IA re-org (PRs #15 + #16 + deploy-browser)
 Divisions landing, install-state lens, Teams (← Loadouts), the how×where engine, Projects pillar, the single
@@ -62,7 +62,7 @@ cargo 264/0, svelte-check 0. See [260621_tool-registry-12-tools-osaurus.md](./26
 
 ### 2026-06-23: v0.2.0 SHIPPED — first feature release + LIVE auto-update (cross-platform) (PRs #21 + #22)
 First release since v0.1.0 (the "0.1.1"/"0.1.2" milestones were never cut separately — they ship here), and
-**auto-update is now live** at `agencyagents.app/updater.json` for both Mac arches. 9 assets (macOS aarch64+x64
+**auto-update is now live** at `agency-agents-app.rubezhanin.app/updater.json` for both Mac arches. 9 assets (macOS aarch64+x64
 DMGs + updater tarballs, Linux deb/rpm/AppImage, Windows x64/arm64); Homebrew cask bumped to 0.2.0. Dedicated
 agency signing key (`ABF5AFD8`). Shook out two real `release.sh` bugs (`set -u` empty-array + missing `--config`
 allowlist merge / tauri#11142), the rustup-vs-Homebrew Intel cross-compile split, and a corrupted updater

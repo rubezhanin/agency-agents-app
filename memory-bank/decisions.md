@@ -84,7 +84,7 @@ agents). **Consequences**: the ✕ is now reversible for the cases that matter, 
 ### 2026-06-14: First release = v0.1.0, manual DMG, auto-update deferred
 **Status**: Approved (plan only — NOT cutting yet). **Context**: all three manifests already read
 `0.1.0`; signing + notarization are proven; the updater pubkey is real but the endpoint
-(`agency-agents-app.zerologic.com/updater.json`) is not provisioned. **Decision**: ship v0.1.0 as a
+(`agency-agents-app.rubezhanin.app/updater.json`) is not provisioned. **Decision**: ship v0.1.0 as a
 signed + notarized `.dmg` for manual download, built with `SKIP_UPDATER=1`; defer auto-update to a later
 release once the endpoint serves a manifest. **Out of scope** (documented as known limitations):
 auto-update, multi-file renderers, Windows/Linux runtime verification, local-runtime target.
@@ -116,13 +116,13 @@ bypassed only when `TAURI_CONFIG` is set, and only with the `false` value). **Co
 green from cold; the Tauri CLI sets its own process-env `TAURI_CONFIG` (precedence over `[env]`), so real
 `tauri dev`/`build` use the merged config (`macOSPrivateApi: true`) — verified `tauri dev` launches clean.
 
-### 2026-06-22: Updater host = `agencyagents.app`; dedicated agency signing key (resolves the OPEN host ADR)
+### 2026-06-22: Updater host = `agency-agents-app.rubezhanin.app`; dedicated agency signing key (resolves the OPEN host ADR)
 **Status**: Approved (v0.2.0). **Context**: the prior OPEN entry assumed the endpoint would be
-`agency-agents-app.zerologic.com` and that the embedded pubkey was a one-off real key. Tracing the live
+`agency-agents-app.rubezhanin.app` and that the embedded pubkey was a one-off real key. Tracing the live
 build host settled both. **Decision (host — the important detail)**: the updater endpoint is
-**`https://agencyagents.app/updater.json`**, NOT the `…zerologic.com` host the UI/docs/source comments
+**`https://agency-agents-app.rubezhanin.app/updater.json`**, NOT the `…zerologic.com` host the UI/docs/source comments
 had drifted to. It is already in `tauri.conf.json` `endpoints` + the CSP `connect-src`, and Caddy on
-`umacbookpro` serves `agencyagents.app` from `~/Sites/agency-agents/` (a sibling vhost to the live
+`umacbookpro` serves `agency-agents-app.rubezhanin.app` from `~/Sites/agency-agents/` (a sibling vhost to the live
 `brew-browser.zerologic.com/updater.json`, so the file_server pattern is proven). Publishing is an
 `rsync` of `dist/updater.json` to `umacbookpro:Sites/agency-agents/updater.json`. **Decision (key)**:
 the embedded pubkey was byte-identical to brew-browser's shared key (id `7335DD0F`); swapped to a

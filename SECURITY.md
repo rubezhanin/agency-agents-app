@@ -12,7 +12,7 @@ This is a pre-1.0 project. Support windows may change as release packaging stabi
 
 ## Reporting A Vulnerability
 
-Email **msitarzewski@gmail.com** with:
+Email **yuri.shvets@example.com** with:
 
 - a clear description of the issue
 - impact

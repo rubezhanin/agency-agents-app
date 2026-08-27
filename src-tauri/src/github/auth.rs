@@ -60,7 +60,7 @@ use crate::error::AppError;
 /// one-click re-sign-in on their next GitHub action.
 ///
 /// The match is enforced by `tests::service_id_matches_tauri_conf`.
-pub const KEYCHAIN_SERVICE: &str = "com.zerologic.agency-agents-app";
+pub const KEYCHAIN_SERVICE: &str = "app.rubezhanin.agency-agents-app";
 
 /// Keychain account name for the access token. Keep this stable across
 /// versions — a rename would orphan tokens already in users' Keychains.
@@ -84,7 +84,7 @@ pub const KEYCHAIN_ACCOUNT_USERNAME: &str = "github_username";
 /// GitHub App's client_id (see `docs/BUILD.md` §"GitHub OAuth App").
 ///
 /// The current value is the real `client_id` for the upstream
-/// Agency Agents GitHub OAuth App under `msitarzewski`'s account.
+/// Agency Agents GitHub OAuth App under `rubezhanin`'s account.
 /// Maintained by the upstream maintainer; do not reuse from forks —
 /// rate-limit budget and any future revocation would tie back to
 /// upstream rather than the fork.
@@ -288,10 +288,8 @@ pub struct SystemKeychain;
 
 impl SystemKeychain {
     fn entry(account: &str) -> Result<keyring::Entry, AppError> {
-        keyring::Entry::new(KEYCHAIN_SERVICE, account).map_err(|e| {
-            AppError::KeychainUnavailable {
-                message: format!("entry({KEYCHAIN_SERVICE}, {account}): {e}"),
-            }
+        keyring::Entry::new(KEYCHAIN_SERVICE, account).map_err(|e| AppError::KeychainUnavailable {
+            message: format!("entry({KEYCHAIN_SERVICE}, {account}): {e}"),
         })
     }
 
@@ -332,9 +330,7 @@ impl SystemKeychain {
         for result in results {
             if let SearchResult::Dict(_) = result {
                 if let Some(dict) = result.simplify_dict() {
-                    if let (Some(account), Some(value)) =
-                        (dict.get("acct"), dict.get("v_Data"))
-                    {
+                    if let (Some(account), Some(value)) = (dict.get("acct"), dict.get("v_Data")) {
                         out.insert(account.clone(), value.clone());
                     }
                 }
@@ -358,11 +354,11 @@ impl KeychainSlot for SystemKeychain {
 
     fn write(&self, account: &str, value: &str) -> Result<(), AppError> {
         let entry = Self::entry(account)?;
-        entry.set_password(value).map_err(|e| {
-            AppError::KeychainUnavailable {
+        entry
+            .set_password(value)
+            .map_err(|e| AppError::KeychainUnavailable {
                 message: format!("write {account}: {e}"),
-            }
-        })
+            })
     }
 
     fn delete(&self, account: &str) -> Result<(), AppError> {
@@ -532,13 +528,10 @@ pub async fn start_device_flow() -> Result<DeviceFlowStart, AppError> {
             message: e.to_string(),
         })?;
     let status = resp.status();
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| AppError::Network {
-            url: DEVICE_CODE_URL.into(),
-            message: format!("body: {e}"),
-        })?;
+    let bytes = resp.bytes().await.map_err(|e| AppError::Network {
+        url: DEVICE_CODE_URL.into(),
+        message: format!("body: {e}"),
+    })?;
     if !status.is_success() {
         return Err(AppError::HttpStatus {
             url: DEVICE_CODE_URL.into(),
@@ -549,10 +542,7 @@ pub async fn start_device_flow() -> Result<DeviceFlowStart, AppError> {
         serde_json::from_slice(&bytes).map_err(|e| AppError::JsonParse {
             command: DEVICE_CODE_URL.into(),
             message: e.to_string(),
-            raw_excerpt: String::from_utf8_lossy(
-                &bytes[..bytes.len().min(256)],
-            )
-            .into_owned(),
+            raw_excerpt: String::from_utf8_lossy(&bytes[..bytes.len().min(256)]).into_owned(),
         })?;
 
     // Clamp interval + expires_in defensively.
@@ -599,10 +589,7 @@ pub async fn poll_device_flow_with(
     let form = [
         ("client_id", GITHUB_OAUTH_CLIENT_ID),
         ("device_code", device_code),
-        (
-            "grant_type",
-            "urn:ietf:params:oauth:grant-type:device_code",
-        ),
+        ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
     ];
     let resp = client
         .post(TOKEN_URL)
@@ -625,8 +612,7 @@ pub async fn poll_device_flow_with(
             status: status.as_u16(),
         });
     }
-    let parsed: TokenResponse =
-        serde_json::from_slice(&bytes).unwrap_or_default();
+    let parsed: TokenResponse = serde_json::from_slice(&bytes).unwrap_or_default();
 
     if let Some(token_str) = parsed.access_token {
         let token = Token::new(token_str)?;
@@ -704,7 +690,7 @@ fn build_oauth_client() -> Result<reqwest::Client, AppError> {
         .user_agent(concat!(
             "agency-agents-app/",
             env!("CARGO_PKG_VERSION"),
-            " (+https://github.com/msitarzewski/agency-agents-app)"
+            " (+https://github.com/rubezhanin/agency-agents-app)"
         ))
         .build()
         .map_err(|e| AppError::Network {
@@ -811,8 +797,14 @@ mod tests {
         let secret = "ghp_supersecrettoken1234567890ABCDEF";
         let t = Token::new(secret).expect("token");
         let dbg = format!("{:?}", t);
-        assert!(!dbg.contains(secret), "Debug must not include token; got {dbg}");
-        assert!(dbg.contains("REDACTED"), "Debug must mention REDACTED; got {dbg}");
+        assert!(
+            !dbg.contains(secret),
+            "Debug must not include token; got {dbg}"
+        );
+        assert!(
+            dbg.contains("REDACTED"),
+            "Debug must mention REDACTED; got {dbg}"
+        );
     }
 
     #[test]
@@ -836,7 +828,11 @@ mod tests {
         let dto = GithubStatusDto {
             signed_in: true,
             username: Some("octocat".into()),
-            scopes: vec!["read:user".into(), "public_repo".into(), "notifications".into()],
+            scopes: vec![
+                "read:user".into(),
+                "public_repo".into(),
+                "notifications".into(),
+            ],
         };
         let json = serde_json::to_string(&dto).expect("serialize");
         let known_token = "ghp_supersecrettoken1234567890ABCDEF";
@@ -848,7 +844,10 @@ mod tests {
             "status DTO must not contain 'access_token': {json}"
         );
         assert!(!json.contains("ghp_"), "status DTO must not contain 'ghp_'");
-        assert!(!json.contains("token"), "status DTO must not contain 'token': {json}");
+        assert!(
+            !json.contains("token"),
+            "status DTO must not contain 'token': {json}"
+        );
         // What it should contain:
         assert!(json.contains("\"signedIn\""));
         assert!(json.contains("\"username\""));
@@ -914,8 +913,7 @@ mod tests {
         // `identifier` field equals our `KEYCHAIN_SERVICE` constant.
         // A drift here means a renamed bundle would silently orphan
         // tokens in the Keychain.
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tauri.conf.json");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
         let raw = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
         let v: serde_json::Value = serde_json::from_str(&raw).expect("parse tauri.conf.json");
@@ -941,13 +939,11 @@ mod tests {
         assert!(s0.scopes.is_empty());
 
         // Write token + scopes + username.
-        kc.write(KEYCHAIN_ACCOUNT_TOKEN, "ghp_secret_value").unwrap();
+        kc.write(KEYCHAIN_ACCOUNT_TOKEN, "ghp_secret_value")
+            .unwrap();
         kc.write(KEYCHAIN_ACCOUNT_USERNAME, "octocat").unwrap();
-        kc.write(
-            KEYCHAIN_ACCOUNT_SCOPES,
-            r#"["read:user","public_repo"]"#,
-        )
-        .unwrap();
+        kc.write(KEYCHAIN_ACCOUNT_SCOPES, r#"["read:user","public_repo"]"#)
+            .unwrap();
 
         let s1 = status_with(&kc).expect("status after sign in");
         assert!(s1.signed_in);
@@ -984,7 +980,8 @@ mod tests {
         assert!(read_scopes_with(&kc).expect("no entry").is_none());
 
         // Valid JSON → Some(scopes).
-        kc.write(KEYCHAIN_ACCOUNT_SCOPES, r#"["read:user","public_repo"]"#).unwrap();
+        kc.write(KEYCHAIN_ACCOUNT_SCOPES, r#"["read:user","public_repo"]"#)
+            .unwrap();
         let scopes = read_scopes_with(&kc).expect("read").expect("Some");
         assert_eq!(scopes, vec!["read:user", "public_repo"]);
 
@@ -1126,9 +1123,9 @@ mod tests {
     fn keychain_constants_are_stable() {
         // Renaming these silently orphans tokens in users' Keychains.
         // Any change here needs an explicit migration plan.
-        // Renamed source-app service ID → com.zerologic.agency-agents-app
+        // Renamed source-app service ID → app.rubezhanin.agency-agents-app
         // on the 2026-06-05 rebrand fork; matches tauri.conf.json identifier.
-        assert_eq!(KEYCHAIN_SERVICE, "com.zerologic.agency-agents-app");
+        assert_eq!(KEYCHAIN_SERVICE, "app.rubezhanin.agency-agents-app");
         assert_eq!(KEYCHAIN_ACCOUNT_TOKEN, "github_access_token");
         assert_eq!(KEYCHAIN_ACCOUNT_SCOPES, "github_access_token_scopes");
         assert_eq!(KEYCHAIN_ACCOUNT_USERNAME, "github_username");

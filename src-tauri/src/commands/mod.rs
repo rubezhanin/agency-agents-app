@@ -1,13 +1,23 @@
 //! Tauri command surface. One sub-module per cluster of related commands.
 //!
-//! `lib.rs` re-exports these via `commands::*` and registers them in
-//! `tauri::generate_handler![]`.
+//! `lib.rs` imports these via `use commands::*;` so the command fns are
+//! in scope for `tauri::generate_handler![]`. The re-exports look unused
+//! inside this file but are load-bearing for the macro invocation.
 
+#[allow(unused_imports)]
 pub mod github;
+#[allow(unused_imports)]
+pub mod hermes;
+#[allow(unused_imports)]
 pub mod settings;
+#[allow(unused_imports)]
 pub mod updater;
 
-// Re-export every command in flat form so `invoke_handler!` can take them.
+#[allow(unused_imports)]
 pub use github::*;
+#[allow(unused_imports)]
+pub use hermes::*;
+#[allow(unused_imports)]
 pub use settings::*;
+#[allow(unused_imports)]
 pub use updater::*;

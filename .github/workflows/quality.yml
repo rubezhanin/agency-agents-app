@@ -1,0 +1,97 @@
+# Quality gates — coverage, dependency advisories, license audit.
+#
+# Schedule: weekly (Sunday 04:00 UTC) + on every push to main. PRs are NOT
+# gated by this workflow (CI does fmt/clippy/test/check/build); this is
+# informational, the weekly cron is the source of truth for the badge.
+
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Rust coverage — llvm-cov → lcov → Codecov
+  # ---------------------------------------------------------------------------
+  coverage:
+    name: rust coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - name: cargo install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: cargo llvm-cov
+        run: |
+          cargo llvm-cov --manifest-path src-tauri/Cargo.toml \
+            --lcov --output-path lcov.info --all-features --locked
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Dependency advisories
+  # ---------------------------------------------------------------------------
+  rust-audit:
+    name: cargo audit + cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo install cargo-audit cargo-deny
+        run: |
+          cargo install --locked cargo-audit
+          cargo install --locked cargo-deny
+      - name: cargo audit
+        run: cargo audit --manifest-path src-tauri/Cargo.toml
+      - name: cargo deny check
+        run: cargo deny --manifest-path src-tauri/Cargo.toml check
+
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: npm audit (moderate+ only, registry fallback enabled)
+        run: npm audit --audit-level=moderate
+
+  # ---------------------------------------------------------------------------
+  # Frontend test runner
+  # ---------------------------------------------------------------------------
+  vitest:
+    name: vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run --reporter=default
+        continue-on-error: true
+        # Vitest is opt-in: a green run is a goal, but it shouldn't gate the
+        # whole pipeline while we build out coverage. Switch to `false` once
+        # we have a real test suite.

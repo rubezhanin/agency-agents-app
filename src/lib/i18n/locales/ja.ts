@@ -512,7 +512,7 @@ const ja = {
   "updates.checkNow": "今すぐチェック",
   "updates.lastChecked": "最終チェック日: {time}",
   "updates.offlineHint": "オフライン モードがオンになっています — 手動更新チェックはブロックされています。マニフェストを確認するには、上記でオフにします。",
-  "updates.onlineHint": "agencyagents.app/updater.json を取得し、公開されたバージョンと実行中のバージョンを比較します。バージョン番号は送信されません。",
+  "updates.onlineHint": "agency-agents-app.rubezhanin.app/updater.json を取得し、公開されたバージョンと実行中のバージョンを比較します。バージョン番号は送信されません。",
   "updates.autoCheck": "毎日自動チェック",
   "updates.autoCheckHint": "オンにすると、Agency Agents は 24 時間ごとにマニフェストをチェックし、新しいバージョンが利用可能な場合はタイトル バーに通知を表示します。オフラインモードがオンの間は自動的に一時停止されます。",
   "updates.autoInstall": "アップデートを自動的にインストールする",

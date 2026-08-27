@@ -78,7 +78,7 @@
       see the changelog + assets even when the manifest snippet is
       terse. */
   let releaseNotesUrl = $derived(
-    info ? `https://github.com/msitarzewski/agency-agents-app/releases/tag/v${info.version}` : null,
+    info ? `https://github.com/rubezhanin/agency-agents-app/releases/tag/v${info.version}` : null,
   );
 
   function onOpenReleaseNotes() {

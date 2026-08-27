@@ -1,0 +1,117 @@
+# macOS release build — signed + notarized .dmg + .app.tar.gz.
+#
+# Fires on tags `v*` (the existing `linux-build.yml` and `windows-build.yml`
+# cover Linux/Windows). The notarization step requires Apple Developer ID
+# credentials in the repo's secrets — see `docs/BUILD.md` for the
+# provisioning checklist. If those secrets are missing, the build still
+# produces an unsigned .dmg with `SKIP_NOTARIZATION=1` and uploads it as
+# an artifact so the build path is not blocked by missing secrets.
+#
+# Mirrors `linux-build.yml`/`windows-build.yml` conventions so the existing
+# release process picks it up unchanged.
+
+name: macOS Build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build — ${{ matrix.arch }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            target: aarch64-apple-darwin
+            rust_target: aarch64-apple-darwin
+          - arch: x86_64
+            target: x86_64-apple-darwin
+            rust_target: x86_64-apple-darwin
+    env:
+      # Apple notarization credentials. Skipped automatically when unset.
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Minisign key for the updater — only present in the org's secrets.
+      AGENCY_UPDATER_KEY: ${{ secrets.AGENCY_UPDATER_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: macos
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.rust_target }}
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Build the bundle
+        env:
+          SKIP_UPDATER: ${{ env.AGENCY_UPDATER_KEY == '' && '1' || '' }}
+        run: npm run tauri build -- --target ${{ matrix.target }}
+
+      - name: Skip notarization when secrets are missing
+        id: notarize_decision
+        run: |
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_PASSWORD" ] || [ -z "$TEAM_ID" ]; then
+            echo "skip_notarize=1" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple notarization secrets missing — uploading unsigned artifact."
+          else
+            echo "skip_notarize=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notarize + staple
+        if: steps.notarize_decision.outputs.skip_notarize != '1'
+        run: |
+          DMG=$(find src-tauri/target/${{ matrix.target }}/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -1)
+          if [ -z "$DMG" ]; then
+            echo "::error::no .dmg produced under src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
+            exit 1
+          fi
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$TEAM_ID" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+
+      - name: Upload .dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: agency-agents-dmg-${{ matrix.arch }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload .app.tar.gz (updater feed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: agency-agents-app-tar-${{ matrix.arch }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload updater signatures
+        if: env.AGENCY_UPDATER_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: agency-agents-sig-${{ matrix.arch }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.sig
+          if-no-files-found: warn
+          retention-days: 30

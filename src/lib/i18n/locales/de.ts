@@ -512,7 +512,7 @@ const de = {
   "updates.checkNow": "Jetzt prüfen",
   "updates.lastChecked": "Zuletzt überprüft: {time}",
   "updates.offlineHint": "Der Offline-Modus ist aktiviert – manuelle Update-Prüfungen sind blockiert. Schalten Sie es oben aus, um das Manifest zu überprüfen.",
-  "updates.onlineHint": "Ruft agencyagents.app/updater.json ab und vergleicht die veröffentlichte Version mit der, die Sie ausführen. Es wird keine Versionsnummer gesendet.",
+  "updates.onlineHint": "Ruft agency-agents-app.rubezhanin.app/updater.json ab und vergleicht die veröffentlichte Version mit der, die Sie ausführen. Es wird keine Versionsnummer gesendet.",
   "updates.autoCheck": "Tägliche automatische Überprüfung",
   "updates.autoCheckHint": "Wenn diese Option aktiviert ist, überprüft Agency Agents das Manifest alle 24 Stunden und zeigt einen Hinweis in der Titelleiste an, wenn eine neuere Version verfügbar ist. Wird automatisch angehalten, während der Offline-Modus aktiviert ist.",
   "updates.autoInstall": "Updates automatisch installieren",

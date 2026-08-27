@@ -3,7 +3,7 @@
 ## 1. Corpus-copy model (source of truth)
 
 ```
-~/Library/Application Support/com.zerologic.agency-agents-app/
+~/Library/Application Support/app.rubezhanin.agency-agents-app/
 ├── corpus/                  # our maintained copy of the agency-agents repo (251 .md)
 │   └── <category>/<slug>.md
 ├── state/
@@ -15,7 +15,7 @@
 - **Seed**: a bundled baseline corpus ships inside the app bundle (resources) so first
   launch works offline. On first run it is extracted to `corpus/`.
 - **Refresh**: fetch the GitHub tarball
-  `https://codeload.github.com/msitarzewski/agency-agents/tar.gz/refs/heads/main`,
+  `https://codeload.github.com/rubezhanin/agency-agents/tar.gz/refs/heads/main`,
   extract, atomically swap `corpus/`, rebuild `corpus-index.json`. Record the resolved
   commit SHA / tag as `corpus_version`. **No runtime git dependency.**
 - This mirrors brew-browser's bundled-catalog + live-refresh pattern, but the served

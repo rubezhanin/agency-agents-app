@@ -8,7 +8,7 @@ Read this first after a compaction. Then `activeContext.md`, `agentLog.md` (appe
 v0.1.1 IA re-org (divisions landing, Teams, Projects pillar, the single InstallModal grid + DeployBrowser) and
 v0.1.2 tool-registry/Osaurus/Playbook arc, **plus LIVE auto-update**. 9 release assets across macOS (aarch64+x64,
 signed/notarized) / Linux (deb/rpm/AppImage) / Windows (x64/arm64); Homebrew cask @ 0.2.0. Auto-update is live at
-`agencyagents.app/updater.json` for **both Mac arches** — dedicated agency signing key `ABF5AFD8` (private key +
+`agency-agents-app.rubezhanin.app/updater.json` for **both Mac arches** — dedicated agency signing key `ABF5AFD8` (private key +
 password in the macOS **Keychain**; canonical backup `~/.config/agency-agents-app/updater.key`).
 **Release-build gotchas (hard-won, now in `BUILD.md` + `release.sh`):** updater-on macOS builds must pass a
 `--config` (the macos-private-api allowlist reads only base `tauri.conf.json` — tauri#11142); Intel cross-compile
@@ -44,11 +44,11 @@ registry. **State: the install-management loop is real and working.** Signed + n
   build`; `npm run check` (0 errors; the only warning is a benign tsconfig `node` note). Full Phase C
   gate: `npm run build:phase-c` (adds the parity test + config validation; `:full` adds the VM matrix).
 - **Active catalog source = a USER CLONE**, persisted in
-  `~/Library/Application Support/com.zerologic.agency-agents-app/state/catalog.json`:
+  `~/Library/Application Support/app.rubezhanin.agency-agents-app/state/catalog.json`:
   `{"kind":"userClone","path":"/Users/michael/Software/AgentLand/agency-agents","manage":true}`.
   So the app reads/compares against THAT clone, not the bundled baseline.
 - App data dir (FIXED this session — was wrongly `…/brew-browser/`): all under
-  `~/Library/Application Support/com.zerologic.agency-agents-app/` → `state/{catalog.json,
+  `~/Library/Application Support/app.rubezhanin.agency-agents-app/` → `state/{catalog.json,
   corpus-index.json,corpus-meta.json,installs.json}`, `corpus/` (bundled only), `backups/`, `settings.json`.
 - Michael's reality: ~184 agents installed via the CLI `install.sh` into `~/.claude/agents/`
   (Claude Code). Report: 157 byte-identical (→ shown `current`), 8 divergent (repo is NEWER → use
@@ -114,7 +114,7 @@ new `tauri.macos.conf.json` override re-adds `macOSPrivateApi` + `transparent` +
   `isBrewError` / `BrewStreamEvent` type names + dead codes in `types.ts`; `reportIssue.ts` shell-exit
   semantics; leftover `tools/` brew pipeline in the tree. `catalog_auto_refresh` has NO scheduler (dead).
 - Updater: minisign key NOT set up (builds run `SKIP_UPDATER=1`). Endpoint placeholder
-  `agency-agents-app.zerologic.com/updater.json`. `updater.pubkey` in tauri.conf is a placeholder.
+  `agency-agents-app.rubezhanin.app/updater.json`. `updater.pubkey` in tauri.conf is a placeholder.
 
 ## What's built + working (this session's arc)
 - **Catalog-as-source-of-truth (#1)**: CatalogSource {bundled|managed|userClone}; detect / provision
@@ -139,7 +139,7 @@ new `tauri.macos.conf.json` override re-adds `macOSPrivateApi` + `transparent` +
 - **Signed + notarized build WORKS**: `scripts/release.sh` (pulls notary pw + updater key from
   Keychain). `SKIP_UPDATER=1 ./scripts/release.sh` → Gatekeeper-accepted, notarized, stapled
   `Agency Agents.app` + signed `.dmg`. Notary creds: keychain service `agency-agents-notary`, account
-  `msitarzewski@mac.com`, **Team `7JQGQ7CRH8`**, Apple ID `msitarzewski@mac.com`. Developer ID cert is
+  `noreply@rubezhanin.app`, **Team `TBD-APPLE-TEAM-ID`**, Apple ID `noreply@rubezhanin.app`. Developer ID cert is
   in the keychain. `.gitignore` hardened for signing secrets.
 - **Icon**: new white-glyph-on-purple icon shipped (`src-tauri/icons/*`, flat). Liquid Glass layered
   source staged in `docs/icon/` (`AppIcon.icon` validates with actool; `layers/`) for macOS 26 Tahoe —
@@ -163,7 +163,7 @@ for the exact script — it found 157 identical / 8 divergent / 19 nested-unknow
 
 ## Key files
 - Backend: `src-tauri/src/{corpus,render,install,github,util}/`, `state.rs`, `types.rs`, `error.rs`
-  (now `AppError`), `lib.rs`. Tauri: `src-tauri/tauri.conf.json` (id com.zerologic.agency-agents-app,
+  (now `AppError`), `lib.rs`. Tauri: `src-tauri/tauri.conf.json` (id app.rubezhanin.agency-agents-app,
   port 1430, signingIdentity, updater endpoint placeholder).
 - Frontend: `src/lib/components/{AgentsWorkspace,PersonaBody,DeploymentMatrix,Switch,DiffModal,
   CatalogFirstRun,SettingsSectionCatalog,Sidebar,ResizeHandle}.svelte`,

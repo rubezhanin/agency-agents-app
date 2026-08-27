@@ -5,4 +5,4 @@
  * heart-icon link, the README sponsor badge, future "support" CTAs.
  * Single source of truth so they can't drift apart.
  */
-export const SPONSOR_URL = "https://github.com/sponsors/msitarzewski";
+export const SPONSOR_URL = "https://github.com/sponsors/rubezhanin";

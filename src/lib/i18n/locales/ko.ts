@@ -512,7 +512,7 @@ const ko = {
   "updates.checkNow": "지금 확인하세요",
   "updates.lastChecked": "마지막 확인: {time}",
   "updates.offlineHint": "오프라인 모드가 켜져 있음 — 수동 업데이트 확인이 차단됩니다. 매니페스트를 확인하려면 위에서 이 기능을 끄세요.",
-  "updates.onlineHint": "agencyagents.app/updater.json를 가져오고 게시된 버전을 실행 중인 버전과 비교합니다. 버전 번호가 전송되지 않습니다.",
+  "updates.onlineHint": "agency-agents-app.rubezhanin.app/updater.json를 가져오고 게시된 버전을 실행 중인 버전과 비교합니다. 버전 번호가 전송되지 않습니다.",
   "updates.autoCheck": "매일 자동 확인",
   "updates.autoCheckHint": "켜져 있으면 Agency Agents는 24시간마다 매니페스트를 확인하고 최신 버전을 사용할 수 있으면 제목 표시줄에 알림을 표시합니다. 오프라인 모드가 켜져 있는 동안 자동으로 정지됩니다.",
   "updates.autoInstall": "자동으로 업데이트 설치",

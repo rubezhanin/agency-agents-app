@@ -6,7 +6,7 @@ app-store-for-AI-agents over the agency-agents repo.
 
 ## Outcome
 - ✅ `cargo check` green · `vite build` green
-- ✅ Rebranded: productName "Agency Agents", id `com.zerologic.agency-agents-app`, window title,
+- ✅ Rebranded: productName "Agency Agents", id `app.rubezhanin.agency-agents-app`, window title,
   CSP (re-pointed to GitHub hosts), Cargo/lib/main, app.html, keychain service id.
 
 ## Files Modified

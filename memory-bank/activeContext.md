@@ -2,18 +2,18 @@
 
 **State**: 🚀 **v0.2.0 SHIPPED (2026-06-23)** — `main` @ `16182e5`. First feature release since the v0.1.0
 launch (the internally-tracked "0.1.1"/"0.1.2" milestones were never cut separately — they ship here), and
-**auto-update is now LIVE** at [`agencyagents.app/updater.json`](https://agencyagents.app/updater.json) for
+**auto-update is now LIVE** at [`agency-agents-app.rubezhanin.app/updater.json`](https://agency-agents-app.rubezhanin.app/updater.json) for
 **both Mac arches** (`darwin-aarch64` + `darwin-x86_64`). Release at
-[releases/tag/v0.2.0](https://github.com/msitarzewski/agency-agents-app/releases/tag/v0.2.0): **9 assets** (macOS
+[releases/tag/v0.2.0](https://github.com/rubezhanin/agency-agents-app/releases/tag/v0.2.0): **9 assets** (macOS
 aarch64+x64 signed/notarized DMGs **+ updater tarballs**, Linux deb/rpm/AppImage, Windows x64/arm64). Homebrew:
-`brew tap msitarzewski/agency-agents && brew install --cask agency-agents` (cask @ 0.2.0). Cross-platform CI in
+`brew tap rubezhanin/agency-agents && brew install --cask agency-agents` (cask @ 0.2.0). Cross-platform CI in
 `.github/workflows/` (linux-build, windows-build) fires on `v*` tags; macOS DMGs build locally via
 `scripts/release.sh`. Full ship log: `agentLog.md` 2026-06-23; task doc `tasks/2026-06/260623_v0.2.0-ship.md`.
 
 **Workflow (from 2026-06-16):** ALL changes go through a **branch → PR → merge to `main`**. No direct commits to main.
 
 ## ✅ v0.2.0 — first feature release + LIVE auto-update — SHIPPED (2026-06-23, PRs #21 + #22; `main` @ 16182e5)
-- **Auto-update is on.** Endpoint `agencyagents.app/updater.json` (Caddy on `umacbookpro` from `~/Sites/agency-agents/`,
+- **Auto-update is on.** Endpoint `agency-agents-app.rubezhanin.app/updater.json` (Caddy on `umacbookpro` from `~/Sites/agency-agents/`,
   sibling vhost to the live `brew-browser.zerologic.com` manifest). **Dedicated agency signing key `ABF5AFD8`**
   (embedded pubkey in `tauri.conf.json`; private key + password in the **macOS Keychain**, services
   `agency-agents-updater-key` / `…-key-pw`; canonical key file backup at `~/.config/agency-agents-app/updater.key`).
@@ -135,7 +135,7 @@ in the shim though it works natively.
 - **Terminology**: user-facing **Category → Division** (catalog repo's term); internal `category` field kept.
 - **Dashboard viz DONE**: replaced the cross-tool matrix with **CoverageDonuts** (one donut per tool,
   sliced by division, shared legend, linked hover); established a curated **division color scheme** as catalog
-  metadata (PR github.com/msitarzewski/agency-agents/pull/592 = `divisions.json`) read via `corpus.colorOf`;
+  metadata (PR github.com/rubezhanin/agency-agents/pull/592 = `divisions.json`) read via `corpus.colorOf`;
   Dashboard "Coverage by tool" click now selects the tool (`ui.openTools`). **`CatalogByDivision.svelte`** (NEW)
   replaces the orange bar-list: ONE proportional bar (segment per division, brand-colored), labels across FOUR
   lanes (2 top, 2 bottom) tied to segments by **non-crossing Z-elbow leaders** (rank-staggered rails +

@@ -1,16 +1,16 @@
 # Project Brief — Agency Agents
 
 **Product**: Agency Agents
-**Bundle ID**: `com.zerologic.agency-agents-app`
-**Repo**: github:msitarzewski/agency-agents-app
-**Author**: Michael Sitarzewski / Zerologic
+**Bundle ID**: `app.rubezhanin.agency-agents-app`
+**Repo**: github:rubezhanin/agency-agents-app
+**Author**: rubezhanin / Rubezhanin
 **License**: MIT · No telemetry · No accounts
 
 ## One-liner
 
 A native macOS app store for AI agents. Browse, search, install, and **track** the
 **210** specialized agent personas (across 16 categories) from
-[`msitarzewski/agency-agents`](https://github.com/msitarzewski/agency-agents)
+[`rubezhanin/agency-agents`](https://github.com/rubezhanin/agency-agents)
 across every AI coding tool you use (Claude Code, Cursor, Codex, Gemini CLI, Copilot,
 Windsurf, Aider, opencode, qwen, openclaw, antigravity).
 (The repo also ships NEXUS playbooks + workflow examples — docs, not agents — a candidate
@@ -38,7 +38,7 @@ database*. That state-tracking layer is the app's core differentiator:
 ## Source of truth (the corpus-copy model)
 
 The app maintains its **own local working copy** of the agency-agents repo in
-`~/Library/Application Support/com.zerologic.agency-agents-app/corpus/`, seeded from a
+`~/Library/Application Support/app.rubezhanin.agency-agents-app/corpus/`, seeded from a
 bundled baseline and refreshed from the GitHub tarball. From that copy it derives a
 hash index (`corpus-index.json`) and renders/install agents into each tool. See
 `systemPatterns.md`.

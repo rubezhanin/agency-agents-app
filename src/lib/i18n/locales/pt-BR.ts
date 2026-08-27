@@ -512,7 +512,7 @@ const ptBR = {
   "updates.checkNow": "Verifique agora",
   "updates.lastChecked": "Última verificação: {time}",
   "updates.offlineHint": "O modo offline está ativado – as verificações manuais de atualização estão bloqueadas. Desligue-o acima para verificar o manifesto.",
-  "updates.onlineHint": "Busca agencyagents.app/updater.json e compara a versão publicada com aquela que você está executando. Nenhum número de versão é enviado.",
+  "updates.onlineHint": "Busca agency-agents-app.rubezhanin.app/updater.json e compara a versão publicada com aquela que você está executando. Nenhum número de versão é enviado.",
   "updates.autoCheck": "Verificação automática diariamente",
   "updates.autoCheckHint": "Quando ativado, Agency Agents verifica o manifesto uma vez a cada 24 horas e exibe um aviso na barra de título se uma versão mais recente estiver disponível. Suspenso automaticamente enquanto o modo offline estiver ativado.",
   "updates.autoInstall": "Instale atualizações automaticamente",

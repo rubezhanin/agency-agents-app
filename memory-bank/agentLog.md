@@ -172,7 +172,7 @@ dead-code warnings on `tauri dev` + asked for repo pull/sync management with Git
 - REAL BUG FIXED: `state.rs::resolve_app_data_dir` pushed "brew-browser" → settings.json + github-cache
   were written to `~/Library/Application Support/brew-browser/` (colliding with the other app), split
   from corpus/ledger/catalog which use the proper bundle dir. Changed to
-  "com.zerologic.agency-agents-app" so ALL app data unifies. (Existing users: settings/github-cache
+  "app.rubezhanin.agency-agents-app" so ALL app data unifies. (Existing users: settings/github-cache
   effectively reset to defaults — acceptable.)
 - FEATURE — Catalog GitHub + sync status: backend `catalog_status` (source, git commit/branch/last-
   commit/dirty, remote→repo_slug via extract_github_repo, version/fetchedAt, agentCount) +
@@ -193,14 +193,14 @@ Refocused every section to show ONLY what's functional + real for Agency Agents:
   Catalog auto-refresh, stale-banner — all non-functional after the brew sweep). Kept the one
   functional toggle (Offline Mode / paranoid_mode, 19 live refs). Rewrote the outbound-paths
   disclosure to the REAL hosts: github.com/codeload (catalog clone/pull/snapshot), api.github.com
-  (stats/auth/star), raw/objects.githubusercontent.com (avatars/assets), agency-agents-app.zerologic.com
+  (stats/auth/star), raw/objects.githubusercontent.com (avatars/assets), agency-agents-app.rubezhanin.app
   (updates). Kept Updates subsection.
 - APPEARANCE: removed the brew "AI features" enrichment toggle (aiFeaturesEnabled — 0 live agency
   consumers; gated brew enriched metadata) + its CSS; fixed "launch brew-browser"→"Agency Agents".
 - GITHUB: reframed "stats on package pages"→"repository stats" for the catalog repo; de-brewed copy.
 - ABOUT: rebranded repo links (app + catalog) + zero-telemetry copy to Agency Agents.
 - UPDATES: brew-browser→Agency Agents throughout; updater URL brew-browser.zerologic.com→
-  agency-agents-app.zerologic.com/updater.json.
+  agency-agents-app.rubezhanin.app/updater.json.
 - Visible strings elsewhere: reportIssue (issue URL → agency-agents-app, "Report to Agency Agents"),
   ui.svelte storage key prefix, UpdateIndicator badge, ActivityDrawer empty-state + report button,
   TitlebarControls donate label, types.ts appError toast messages (no more "Homebrew"/"brew exited").
@@ -244,10 +244,10 @@ many commits (see git log eacbf35..2370ce0). Highlights:
   Update/Track/Delete (Delete confirms + warns no-undo; inapplicable disabled). install.bulk()=1 reconcile.
 - AppError rename + dead-brew purge (0 warnings); Settings refocused; resizable/persisted panels;
   window geometry persists on resize; install-into multi-select + remembered selection; app-data-dir
-  bug fixed (was ~/Library/Application Support/brew-browser → com.zerologic.agency-agents-app).
+  bug fixed (was ~/Library/Application Support/brew-browser → app.rubezhanin.agency-agents-app).
 - SIGNED + NOTARIZED BUILD: scripts/release.sh pulls notary pw + updater key from Keychain.
   SKIP_UPDATER=1 ./scripts/release.sh → Gatekeeper-accepted notarized+stapled .app + signed .dmg.
-  Notary creds: keychain service "agency-agents-notary" / msitarzewski@mac.com, Team 7JQGQ7CRH8.
+  Notary creds: keychain service "agency-agents-notary" / noreply@rubezhanin.app, Team TBD-APPLE-TEAM-ID.
   Updater minisign key NOT set up yet. .gitignore hardened.
 - ICON: new white-glyph-on-purple flat icon shipped; Liquid Glass layered source staged in docs/icon/
   (AppIcon.icon validates with actool) for Tahoe — not wired to build (Icon Composer is the export path).
@@ -500,7 +500,7 @@ Iterating live on the Dashboard "Cross-tool coverage" + division color. All gree
 - **DIVISION COLOR SCHEME (the big one).** Divisions had NO color (just label+icon). Established a curated
   18-color palette (approved by Michael) and made it CATALOG METADATA:
   - **Catalog PR**: `divisions.json` in the agency-agents repo (branch `add-division-metadata`) — slug →
-    {label, icon, color} for all 18 dirs. PR: github.com/msitarzewski/agency-agents/pull/592. Fixes "GIS"
+    {label, icon, color} for all 18 dirs. PR: github.com/rubezhanin/agency-agents/pull/592. Fixes "GIS"
     (was title-cased "Gis") + covers gis/integrations which had no metadata.
   - **App reads it**: `src-tauri/data/agency-categories.json` mirrors it (color + the 2 missing divisions);
     threaded through Rust (`CategoryMetaRow.color`, `category_meta` → 3-tuple, `Category.color`, default
@@ -627,7 +627,7 @@ bundled `agency-categories.json` (no drift). Then wired the app to read it direc
   consider also dropping `strategy` from the division set (0 agents). Then we're clear to cut **v0.1.0**.
 
 ## 2026-06-16 — v0.1.0 SHIPPED (cross-platform, signed) + repo PUBLIC + Homebrew tap
-Cut the first public release: **github.com/msitarzewski/agency-agents-app/releases/tag/v0.1.0**, all 7 artifacts.
+Cut the first public release: **github.com/rubezhanin/agency-agents-app/releases/tag/v0.1.0**, all 7 artifacts.
 - **macOS** aarch64 + x64 DMGs — signed + **notarized** (spctl: accepted / Notarized Developer ID; stapler ok).
   Built locally via `scripts/release.sh` (dual-arch; host native, x64 cross via rustup).
 - **Linux** deb/rpm/AppImage (x86_64) + **Windows** x64/arm64 NSIS — built by NEW GitHub Actions workflows
@@ -638,8 +638,8 @@ Cut the first public release: **github.com/msitarzewski/agency-agents-app/releas
   public; `gh` auth-download worked, masking it). Pre-flight secret scan: gitleaks 50 commits → **1 FALSE
   POSITIVE** (AGENTS.md "Context Exceeded" prose); no secret files in history; `.gitignore` covers `.env*`/`*.key`;
   notary pw + updater private key live in Keychain (never committed). Clean → public.
-- **Homebrew tap**: NEW repo `msitarzewski/homebrew-agency-agents` with `Casks/agency-agents.rb` (dual-arch,
-  installs the notarized DMG). `brew tap msitarzewski/agency-agents && brew install --cask agency-agents`.
+- **Homebrew tap**: NEW repo `rubezhanin/homebrew-agency-agents` with `Casks/agency-agents.rb` (dual-arch,
+  installs the notarized DMG). `brew tap rubezhanin/agency-agents && brew install --cask agency-agents`.
   Audited online (download + sha ok). README/landing got download + brew-install sections; landing redeployed.
 - **⚠️ HARD-WON MACOS BUILD GOTCHA** (cost ~2h of debugging): on macOS 27 Tahoe BETA + Xcode BETA, the Tauri CLI
   sets `MACOSX_DEPLOYMENT_TARGET=13.0` (from `minimumSystemVersion`), which breaks FRESH proc-macro compilation
@@ -678,10 +678,10 @@ never separate releases; they ship here. Then took it further: **turned auto-upd
   consolidated `docs/release-notes/0.2.0.md`; README four-pillar/Teams/Projects/registry/Osaurus pass (+ Osaurus
   install-target row, 8 installable); `docs/PLAN.md` refresh (Phase D = done via the registry; post-0.2.0 punch
   list). Inert "Install updates automatically" toggle (present-but-disabled). Fixed two stale updater strings
-  (`agency-agents-app.zerologic.com` → `agencyagents.app`; broken release-notes URL). **Dedicated agency signing
+  (`agency-agents-app.rubezhanin.app` → `agency-agents-app.rubezhanin.app`; broken release-notes URL). **Dedicated agency signing
   key `ABF5AFD8`** swapped in (clean isolation while no clients live). Scoped review (Code Reviewer + Accessibility)
   caught a stale Rust `UPDATER_PUBKEY` const → synced. Updater-host ADR resolved (`decisions.md` 2026-06-22).
-- **Auto-update LIVE** at `agencyagents.app/updater.json` (Caddy on umbp from `~/Sites/agency-agents/`, sibling
+- **Auto-update LIVE** at `agency-agents-app.rubezhanin.app/updater.json` (Caddy on umbp from `~/Sites/agency-agents/`, sibling
   vhost to the proven `brew-browser.zerologic.com` manifest). Building + deploying it surfaced real bugs, all
   fixed (PR #22):
   - `release.sh` **`set -u` empty-array crash** (`BUILD_ARGS`) + **missing `--config` merge** — the

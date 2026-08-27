@@ -12,9 +12,9 @@
   import { i18n } from "$lib/stores/i18n.svelte";
   import appIcon from "$lib/assets/app-icon.png";
 
-  const REPO_URL = "https://github.com/msitarzewski/agency-agents-app";
-  const LICENSE_URL = "https://github.com/msitarzewski/agency-agents-app/blob/main/LICENSE";
-  const AGENCY_AGENTS_URL = "https://github.com/msitarzewski/agency-agents";
+  const REPO_URL = "https://github.com/rubezhanin/agency-agents-app";
+  const LICENSE_URL = "https://github.com/rubezhanin/agency-agents-app/blob/main/LICENSE";
+  const AGENCY_AGENTS_URL = "https://github.com/rubezhanin/agency-agents";
 
   let appVer = $state<string | null>(null);
   let modalEl: HTMLDivElement | undefined = $state();
@@ -74,7 +74,7 @@
       <dl class="meta">
         <div><dt>{i18n.t("about.version")}</dt><dd class="mono">{appVer ?? "…"}</dd></div>
         <div><dt>{i18n.t("about.license")}</dt><dd><button class="link" onclick={openLicense}>MIT</button></dd></div>
-        <div><dt>{i18n.t("about.repo")}</dt><dd><button class="link" onclick={openRepo}>github.com/msitarzewski/agency-agents-app</button></dd></div>
+        <div><dt>{i18n.t("about.repo")}</dt><dd><button class="link" onclick={openRepo}>github.com/rubezhanin/agency-agents-app</button></dd></div>
       </dl>
 
       <button class="donate-cta" onclick={openSponsor} title={i18n.t("about.sponsorTitle")}>

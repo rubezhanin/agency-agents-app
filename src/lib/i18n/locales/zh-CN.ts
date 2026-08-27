@@ -512,7 +512,7 @@ const zhCN = {
   "updates.checkNow": "立即查看",
   "updates.lastChecked": "最后检查时间：{time}",
   "updates.offlineHint": "离线模式已开启 — 手动更新检查被阻止。将其关闭上面以检查清单。",
-  "updates.onlineHint": "获取 agencyagents.app/updater.json 并将已发布的版本与您正在运行的版本进行比较。没有发送版本号。",
+  "updates.onlineHint": "获取 agency-agents-app.rubezhanin.app/updater.json 并将已发布的版本与您正在运行的版本进行比较。没有发送版本号。",
   "updates.autoCheck": "每日自动检查",
   "updates.autoCheckHint": "启用后，Agency Agents 每 24 小时检查一次清单，并在标题栏中显示通知（如果有新版本可用）。离线模式开启时自动暂停。",
   "updates.autoInstall": "自动安装更新",

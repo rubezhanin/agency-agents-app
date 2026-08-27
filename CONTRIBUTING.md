@@ -101,7 +101,7 @@ The recommended next architecture is a manifest in the AA repo that both `script
 ### Tool definitions live in the catalog, not here
 
 `src-tauri/data/tools.json` is a **verbatim mirror** of the `tools.json` the
-[`agency-agents`](https://github.com/msitarzewski/agency-agents) catalog owns, and
+[`agency-agents`](https://github.com/rubezhanin/agency-agents) catalog owns, and
 `src-tauri/resources/corpus-baseline/scripts/convert.sh` mirrors that repo's converter.
 The Rust renderers in `src-tauri/src/render/` are ports of `convert.sh` and must stay
 byte-for-byte identical to it — that is exactly what the parity test enforces.

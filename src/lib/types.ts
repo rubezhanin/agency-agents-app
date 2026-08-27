@@ -17,7 +17,7 @@ export type CaskIconMode = "off" | "installed-only" | "all";
 
 /**
  * Persisted user settings (Phase 12d). Lives at
- * `~/Library/Application Support/com.zerologic.agency-agents-app/settings.json` and is
+ * `~/Library/Application Support/app.rubezhanin.agency-agents-app/settings.json` and is
  * round-tripped via `settingsGet` / `settingsSet`.
  *
  * Bounds (enforced server-side, also re-checked client-side for snappier
@@ -180,7 +180,7 @@ export interface CreatedIssue {
 
 /**
  * A newer Agency Agents version surfaced by the manifest at
- * `agencyagents.app/updater.json`. Held by the updater store
+ * `agency-agents-app.rubezhanin.app/updater.json`. Held by the updater store
  * once a check returns `available`. Matches the camelCase wire shape
  * the backend's `UpdateCheckOutcome::Available` flattens onto when
  * serde-tagged with `kind`.
@@ -583,8 +583,72 @@ export type SettingsSection =
   | "network"
   | "github"
   | "activity"
-  | "about";
+  | "about"
+  | "hermes";
 
 /** Command-palette item — a verb (action). */
 export type PaletteItem =
   | { kind: "command"; id: string; label: string; shortcut?: string; section?: string; run: () => void | Promise<void> };
+
+// =========================================================
+// Hermes plugin types (0.4.0)
+// =========================================================
+//
+// Mirrors the Rust DTOs in `src-tauri/src/commands/hermes.rs` and
+// `src-tauri/src/hermes/probe.rs`. The plugin format itself is documented
+// in `docs/HERMES-PLUGIN.md`.
+
+/** Where the `hermes` CLI was located when it was last probed. */
+export type HermesProbeSource = "path" | "scan" | "missing";
+
+/**
+ * Result of `hermes_status` — the local `hermes` CLI state. `found: false`
+ * means the user has not installed the CLI yet (or it's not on PATH); the
+ * app can still install the plugin directory, but the user will need to
+ * run `hermes plugin install <path>` themselves.
+ */
+export interface HermesProbe {
+  found: boolean;
+  /** Absolute path to the `hermes` binary, or `null` if not found. */
+  path: string | null;
+  source: HermesProbeSource;
+  /** Parsed `MAJOR.MINOR.PATCH` from `hermes --version`, or `null`. */
+  version: string | null;
+  meetsMinimum: boolean;
+  /** The minimum `hermes` version we integrate with (currently `0.12.0`). */
+  minimum: string;
+  /** Path from `hermes config path`, or `null` if the CLI is missing. */
+  configPath: string | null;
+  /** Whether `hermes kanban` subcommand is available on this install. */
+  kanbanAvailable: boolean;
+  /** Profiles from `hermes profile list`. */
+  profiles: string[];
+  /** Tail of stderr from a failed probe, if any. */
+  stderrTail: string | null;
+}
+
+/** A persona passed to `hermes_install` / `hermes_stage`. Body is the
+    full source text from the catalog. Matches `RenderableAgent` in
+    `src-tauri/src/commands/hermes.rs`. */
+export interface RenderableAgent {
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  body: string;
+}
+
+/** Per-skill hash returned by the install. */
+export interface HermesSkillHash {
+  slug: string;
+  hash: string;
+}
+
+/** Result of `hermes_install` / `hermes_stage`. */
+export interface HermesInstallResult {
+  manifestHash: string;
+  routerHash: string;
+  skillHashes: HermesSkillHash[];
+  installRoot: string;
+  agentCount: number;
+}
