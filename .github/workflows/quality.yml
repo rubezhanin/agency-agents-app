@@ -40,7 +40,7 @@ jobs:
           cargo llvm-cov --manifest-path src-tauri/Cargo.toml \
             --lcov --output-path lcov.info --all-features --locked
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           files: lcov.info
           fail_ci_if_error: false
