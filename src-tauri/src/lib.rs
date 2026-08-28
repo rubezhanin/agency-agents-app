@@ -14,7 +14,14 @@ mod install;
 mod registry;
 mod render;
 mod state;
-mod types;
+// `types` is intentionally `pub` (not `pub(crate)`) so the ts-rs
+// integration test in `tests/ts_export.rs` can `use
+// rubezhanin_agency_agents_lib::types::*` to drive the codegen. The
+// crate is a Tauri lib (staticlib / cdylib / rlib), so the only
+// "consumer" of this surface is the Tauri build itself and the
+// TypeScript frontend \u2014 making the types module `pub` doesn't widen
+// any user-facing API beyond what's already implicit in a Tauri app.
+pub mod types;
 mod util;
 
 use commands::*;

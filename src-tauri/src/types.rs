@@ -4,6 +4,7 @@
 //! TypeScript side matches `src/lib/types.ts` exactly.
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 // =========================================================
 // Agency Agents — corpus subsystem (contracts.md §A)
@@ -25,6 +26,8 @@ pub type Tool = String;
 /// project-scoped tools install into a tracked `project_path`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub enum Scope {
     User,
     Project,
@@ -39,6 +42,8 @@ pub enum Scope {
 /// discriminated union.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub enum CatalogSource {
     /// App-managed copy seeded from the bundled baseline (`<app_data>/corpus`).
     /// The always-works default; never touches anything outside app data.
@@ -61,6 +66,8 @@ impl Default for CatalogSource {
 /// A catalog directory discovered on disk (for the first-run / Settings picker).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct CatalogCandidate {
     /// Absolute path to the candidate catalog root.
     pub path: String,
@@ -76,6 +83,8 @@ pub struct CatalogCandidate {
 /// PATH (so the UI can explain clone vs snapshot provisioning).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct CatalogDetection {
     pub git_available: bool,
     /// True when a filesystem scan of common dev roots was performed (the
@@ -90,6 +99,8 @@ pub struct CatalogDetection {
 /// (bundled snapshot) source.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct CatalogStatus {
     pub source: CatalogSource,
     /// Catalog root path (None for the bundled, app-data-internal source).
@@ -116,6 +127,8 @@ pub struct CatalogStatus {
 /// diffs" view. Git sources fetch + compare against the upstream branch.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct CatalogUpdateCheck {
     pub is_git: bool,
     /// Commits the upstream branch has that we don't (how far behind).
@@ -137,6 +150,8 @@ pub struct CatalogUpdateCheck {
 /// to keep payloads small; `corpus_get` returns it populated.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct Agent {
     /// Filename without `.md`, e.g. `"frontend-developer"`.
     pub slug: String,
@@ -164,6 +179,8 @@ pub struct Agent {
 /// bytes (contracts.md §E).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct CorpusEntry {
     pub slug: String,
     pub name: String,
@@ -183,6 +200,8 @@ pub struct CorpusEntry {
 /// Top-level metadata for the maintained corpus copy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct CorpusMeta {
     pub version: String,
     pub commit: Option<String>,
@@ -198,6 +217,8 @@ pub struct CorpusMeta {
 /// per-tool conversion, used by reconciliation to classify state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct InstallRecord {
     pub slug: String,
     pub tool: Tool,
@@ -223,6 +244,8 @@ pub struct InstallRecord {
 /// test that classifies each on-disk agent file.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub enum InstallState {
     Current,
     Outdated,
@@ -235,6 +258,8 @@ pub enum InstallState {
 /// `body_hash` unchanged) or substantive (prompt body changed).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub enum UpdateKind {
     Cosmetic,
     Substantive,
@@ -245,6 +270,8 @@ pub enum UpdateKind {
 /// `Some(..)` only when `state == Outdated`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct InstalledAgent {
     pub slug: String,
     pub name: String,
@@ -266,6 +293,8 @@ pub struct InstalledAgent {
 /// what an Update/Restore would change before any file is touched.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct AgentDiff {
     pub slug: String,
     pub tool: Tool,
@@ -285,6 +314,8 @@ pub struct AgentDiff {
 /// deployment surface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct ToolInfo {
     pub tool: Tool,
     pub label: String,
@@ -302,6 +333,8 @@ pub struct ToolInfo {
 /// timed out, or the tool has no known version command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct ToolVersion {
     pub tool: Tool,
     pub version: Option<String>,
@@ -312,6 +345,8 @@ pub struct ToolVersion {
 /// frontend resolves via its static icon map.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct Category {
     pub slug: String,
     pub label: String,
@@ -326,6 +361,8 @@ pub struct Category {
 /// deployment; one agent in five projects = five tracked rows.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct ProjectInfo {
     /// Absolute project root path.
     pub path: String,
