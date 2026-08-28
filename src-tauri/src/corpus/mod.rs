@@ -30,6 +30,22 @@
 mod parse;
 pub mod source;
 pub mod tarball;
+mod categories;
+mod paths;
+
+use self::categories::{
+    bundled_division_meta, bundled_division_slugs, CategoryMetaRow, DivisionsFile,
+    DIVISIONS_FILENAME,
+};
+// Re-export `state_dir` so external callers (`install::ledger_path`,
+// anything else that needs `<app_data>/state`) can use the natural
+// `corpus::state_dir(...)` form without having to know the helper
+// lives in `corpus::paths`. `pub(crate)` keeps it internal — these
+// are *our* filesystem layout helpers, not part of the crate's public
+// API surface. The other helpers (`corpus_dir`, `index_path`, `meta_path`,
+// `catalog_source_path`) are only consumed inside the `corpus` module
+// itself for now, so they stay un-re-exported.
+pub(crate) use self::paths::state_dir;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -234,7 +250,7 @@ impl Corpus {
         self.category_order
             .iter()
             .map(|slug| {
-                let (label, icon, color) = category_meta_from(&self.division_meta, slug);
+                let (label, icon, color) = self::categories::category_meta_from(&self.division_meta, slug);
                 Category {
                     slug: slug.clone(),
                     label,
@@ -253,147 +269,6 @@ impl Corpus {
             message: format!("serialize corpus-index.json: {e}"),
         })
     }
-}
-
-// ---------- Category metadata ----------
-
-/// The bundled `categories.json` shape we read label + icon from. Only
-/// the `categories` map is needed here.
-#[derive(Debug, Deserialize)]
-struct CategoriesFile {
-    categories: BTreeMap<String, CategoryMetaRow>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct CategoryMetaRow {
-    label: String,
-    icon: String,
-    #[serde(default = "default_division_color")]
-    color: String,
-}
-
-/// The catalog's `divisions.json` shape (PR #592): the canonical, first-class
-/// source for division presentation metadata, shared with the CLI installer +
-/// linters. Same row shape as the bundled file, under a `divisions` key.
-#[derive(Debug, Deserialize)]
-struct DivisionsFile {
-    divisions: BTreeMap<String, CategoryMetaRow>,
-}
-
-/// Neutral fallback color for a division without one in the metadata.
-fn default_division_color() -> String {
-    "#94A3B8".to_string()
-}
-
-const CATEGORIES_JSON: &str = include_str!("../../data/agency-categories.json");
-const DIVISIONS_FILENAME: &str = "divisions.json";
-
-/// The bundled `agency-categories.json` parsed into a slug → row map. This is
-/// the floor the app always ships — used directly on first run / for an old
-/// clone, and as the base that `divisions.json` overlays onto.
-fn bundled_division_meta() -> BTreeMap<String, CategoryMetaRow> {
-    serde_json::from_str::<CategoriesFile>(CATEGORIES_JSON)
-        .map(|f| f.categories)
-        .unwrap_or_default()
-}
-
-/// The bundled division slugs (offline default) — the keys of the bundled floor,
-/// sorted. Used where the active catalog's own `divisions.json` isn't available
-/// to enumerate divisions from (e.g. a tarball with no metadata, or detection).
-fn bundled_division_slugs() -> Vec<String> {
-    let mut v: Vec<String> = bundled_division_meta().into_keys().collect();
-    v.sort();
-    v
-}
-
-/// Resolve division metadata for the active catalog: start from the bundled
-/// floor, then overlay the catalog root's `divisions.json` (PR #592 — the
-/// canonical source shared with the CLI installer + linters) when present and
-/// parseable. First-run (Bundled) users and pre-#592 clones simply have no
-/// `divisions.json`, so they keep the bundled metadata — no drift, no failure.
-/// Overlaying (rather than replacing) means a `divisions.json` that omits a
-/// division still falls back to the bundled row for it.
-fn load_division_meta(catalog_root: &Path) -> BTreeMap<String, CategoryMetaRow> {
-    let mut meta = bundled_division_meta();
-    let path = catalog_root.join(DIVISIONS_FILENAME);
-    match std::fs::read_to_string(&path) {
-        Ok(raw) => match serde_json::from_str::<DivisionsFile>(&raw) {
-            Ok(file) => {
-                for (slug, row) in file.divisions {
-                    meta.insert(slug, row);
-                }
-                tracing::debug!("corpus: division metadata sourced from {}", path.display());
-            }
-            Err(e) => tracing::warn!(
-                "corpus: {} present but unparseable ({e}); using bundled division metadata",
-                path.display()
-            ),
-        },
-        // Absent is the common, expected case (first run / old clone) — not a warning.
-        Err(_) => tracing::debug!(
-            "corpus: no {DIVISIONS_FILENAME} at catalog root; using bundled division metadata"
-        ),
-    }
-    meta
-}
-
-/// Resolve `(label, icon, color)` for a category slug from a resolved division
-/// metadata map. Falls back to a title-cased slug + a neutral `Folder` icon +
-/// a neutral color if the slug is somehow absent (keeps Discover rendering
-/// rather than dropping a tile).
-fn category_meta_from(
-    meta: &BTreeMap<String, CategoryMetaRow>,
-    slug: &str,
-) -> (String, String, String) {
-    match meta.get(slug) {
-        Some(row) => (row.label.clone(), row.icon.clone(), row.color.clone()),
-        None => (
-            title_case(slug),
-            "Folder".to_string(),
-            default_division_color(),
-        ),
-    }
-}
-
-/// `"game-development"` → `"Game Development"`. Deterministic fallback for
-/// the unlikely missing-slug case.
-fn title_case(slug: &str) -> String {
-    slug.split('-')
-        .map(|w| {
-            let mut chars = w.chars();
-            match chars.next() {
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-                None => String::new(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-// ---------- Path helpers ----------
-
-/// The working corpus directory: `<app_data_dir>/corpus`. ALWAYS derived
-/// from `app_data_dir` — never composed from IPC input.
-pub(crate) fn corpus_dir(app_data_dir: &Path) -> PathBuf {
-    app_data_dir.join("corpus")
-}
-
-/// The state directory holding `corpus-index.json` + `corpus-meta.json` and
-/// (Phase 2) the install ledger `installs.json`.
-pub(crate) fn state_dir(app_data_dir: &Path) -> PathBuf {
-    app_data_dir.join("state")
-}
-
-fn index_path(app_data_dir: &Path) -> PathBuf {
-    state_dir(app_data_dir).join("corpus-index.json")
-}
-
-fn meta_path(app_data_dir: &Path) -> PathBuf {
-    state_dir(app_data_dir).join("corpus-meta.json")
-}
-
-fn catalog_source_path(app_data_dir: &Path) -> PathBuf {
-    state_dir(app_data_dir).join("catalog.json")
 }
 
 // ---------- Build / load ----------
@@ -449,7 +324,7 @@ pub async fn resolve_active(app_data_dir: &Path, baseline_dir: &Path) -> Corpus 
     // Prefer the catalog's own divisions.json (PR #592) for division label /
     // icon / color, falling back to the bundled metadata for first-run users
     // and pre-#592 clones that don't carry it yet.
-    corpus.division_meta = load_division_meta(&dir);
+    corpus.division_meta = self::categories::load_division_meta(&dir);
 
     // Persist index + meta (best effort — read commands work from the
     // in-memory copy regardless; the on-disk index exists for the
@@ -567,7 +442,7 @@ async fn build_from_dir(
         index,
         category_order: categories.to_vec(),
         // Bundled floor; resolve_active overlays the catalog's divisions.json.
-        division_meta: bundled_division_meta(),
+        division_meta: self::categories::bundled_division_meta(),
         meta: CorpusMeta {
             version: version.to_string(),
             commit: None,
@@ -586,7 +461,7 @@ fn empty_corpus(version: &str, categories: &[String]) -> Corpus {
         agents: Vec::new(),
         index: BTreeMap::new(),
         category_order: categories.to_vec(),
-        division_meta: bundled_division_meta(),
+        division_meta: self::categories::bundled_division_meta(),
         meta: CorpusMeta {
             version: version.to_string(),
             commit: None,
@@ -670,7 +545,7 @@ async fn seed_from_baseline(
 /// current UTC time so subsequent launches don't re-stamp it (keeps the
 /// index byte-stable across launches).
 async fn persist(app_data_dir: &Path, corpus: &Corpus) -> Result<(), AppError> {
-    let sdir = state_dir(app_data_dir);
+    let sdir = self::paths::state_dir(app_data_dir);
     tokio::fs::create_dir_all(&sdir)
         .await
         .map_err(|e| AppError::Io {
@@ -679,7 +554,7 @@ async fn persist(app_data_dir: &Path, corpus: &Corpus) -> Result<(), AppError> {
 
     // Index — deterministic, no timestamp.
     let index_bytes = corpus.index_json()?;
-    atomic_write(&index_path(app_data_dir), &index_bytes).await?;
+    atomic_write(&self::paths::index_path(app_data_dir), &index_bytes).await?;
 
     // Meta — preserve prior fetched_at/commit if present; else stamp now.
     let prior = load_stored_meta(app_data_dir).await;
@@ -699,13 +574,13 @@ async fn persist(app_data_dir: &Path, corpus: &Corpus) -> Result<(), AppError> {
     let meta_bytes = serde_json::to_vec_pretty(&stored).map_err(|e| AppError::Internal {
         message: format!("serialize corpus-meta.json: {e}"),
     })?;
-    atomic_write(&meta_path(app_data_dir), &meta_bytes).await?;
+    atomic_write(&self::paths::meta_path(app_data_dir), &meta_bytes).await?;
     Ok(())
 }
 
 /// Load `corpus-meta.json` if present + parseable, else `None`.
 async fn load_stored_meta(app_data_dir: &Path) -> Option<StoredMeta> {
-    let path = meta_path(app_data_dir);
+    let path = self::paths::meta_path(app_data_dir);
     let bytes = tokio::fs::read(&path).await.ok()?;
     serde_json::from_slice(&bytes).ok()
 }
@@ -758,14 +633,14 @@ async fn refresh(app_data_dir: &Path) -> Result<CorpusMeta, AppError> {
 
     // Persist a fresh meta (overwrite fetched_at/version this time —
     // unlike the baseline persist which preserves prior fetched_at).
-    let sdir = state_dir(app_data_dir);
+    let sdir = self::paths::state_dir(app_data_dir);
     tokio::fs::create_dir_all(&sdir)
         .await
         .map_err(|e| AppError::Io {
             message: format!("create state dir {}: {e}", sdir.display()),
         })?;
     let index_bytes = corpus.index_json()?;
-    atomic_write(&index_path(app_data_dir), &index_bytes).await?;
+    atomic_write(&self::paths::index_path(app_data_dir), &index_bytes).await?;
     let stored = StoredMeta {
         version: version.clone(),
         commit: None,
@@ -775,7 +650,7 @@ async fn refresh(app_data_dir: &Path) -> Result<CorpusMeta, AppError> {
     let meta_bytes = serde_json::to_vec_pretty(&stored).map_err(|e| AppError::Internal {
         message: format!("serialize corpus-meta.json: {e}"),
     })?;
-    atomic_write(&meta_path(app_data_dir), &meta_bytes).await?;
+    atomic_write(&self::paths::meta_path(app_data_dir), &meta_bytes).await?;
 
     Ok(corpus.meta)
 }
@@ -1176,7 +1051,7 @@ pub async fn catalog_source_get(app: AppHandle) -> Result<CatalogSource, AppErro
 #[tauri::command]
 pub async fn catalog_configured(app: AppHandle) -> Result<bool, AppError> {
     let adir = app_data_dir(&app)?;
-    Ok(catalog_source_path(&adir).exists())
+    Ok(self::paths::catalog_source_path(&adir).exists())
 }
 
 /// `catalog_source_set(source)` — switch where the catalog is read from, then
@@ -1423,7 +1298,7 @@ fn looks_like_catalog(root: &Path) -> bool {
     if root.join("scripts").join("convert.sh").exists() {
         return true;
     }
-    bundled_division_meta()
+    self::categories::bundled_division_meta()
         .keys()
         .any(|c| root.join(c).is_dir())
 }
@@ -1643,23 +1518,23 @@ mod tests {
         let corpus = resolve_active(app_data.path(), baseline.path()).await;
         assert_eq!(corpus.count(), 2);
         // Working copy + index were written.
-        assert!(corpus_dir(app_data.path())
+        assert!(self::paths::corpus_dir(app_data.path())
             .join("engineering/alpha.md")
             .exists());
-        assert!(index_path(app_data.path()).exists());
-        assert!(meta_path(app_data.path()).exists());
+        assert!(self::paths::index_path(app_data.path()).exists());
+        assert!(self::paths::meta_path(app_data.path()).exists());
     }
 
     #[test]
     fn title_case_handles_hyphens() {
-        assert_eq!(title_case("game-development"), "Game Development");
-        assert_eq!(title_case("engineering"), "Engineering");
+        assert_eq!(self::categories::title_case("game-development"), "Game Development");
+        assert_eq!(self::categories::title_case("engineering"), "Engineering");
     }
 
     #[test]
     fn category_meta_resolves_from_bundled_json() {
-        let bundled = bundled_division_meta();
-        let (label, icon, color) = category_meta_from(&bundled, "engineering");
+        let bundled = self::categories::bundled_division_meta();
+        let (label, icon, color) = self::categories::category_meta_from(&bundled, "engineering");
         assert_eq!(label, "Engineering");
         assert_eq!(icon, "Code");
         assert_eq!(color, "#3B82F6");
@@ -1667,18 +1542,18 @@ mod tests {
 
     #[test]
     fn category_meta_falls_back_for_unknown_slug() {
-        let bundled = bundled_division_meta();
-        let (label, icon, color) = category_meta_from(&bundled, "made-up-division");
+        let bundled = self::categories::bundled_division_meta();
+        let (label, icon, color) = self::categories::category_meta_from(&bundled, "made-up-division");
         assert_eq!(label, "Made Up Division");
         assert_eq!(icon, "Folder");
-        assert_eq!(color, default_division_color());
+        assert_eq!(color, self::categories::default_division_color());
     }
 
     #[test]
     fn load_division_meta_missing_file_uses_bundled() {
         // First-run / pre-#592 clone: no divisions.json at the root → bundled.
         let root = tempfile::tempdir().unwrap();
-        let meta = load_division_meta(root.path());
+        let meta = self::categories::load_division_meta(root.path());
         assert_eq!(meta.get("engineering").unwrap().color, "#3B82F6");
     }
 
@@ -1696,7 +1571,7 @@ mod tests {
             } }"##,
         )
         .unwrap();
-        let meta = load_division_meta(root.path());
+        let meta = self::categories::load_division_meta(root.path());
         // Overridden from the catalog.
         let eng = meta.get("engineering").unwrap();
         assert_eq!((eng.icon.as_str(), eng.color.as_str()), ("Cpu", "#000000"));
@@ -1710,7 +1585,7 @@ mod tests {
     fn load_division_meta_malformed_file_uses_bundled() {
         let root = tempfile::tempdir().unwrap();
         std::fs::write(root.path().join(DIVISIONS_FILENAME), "{ not valid json ").unwrap();
-        let meta = load_division_meta(root.path());
+        let meta = self::categories::load_division_meta(root.path());
         assert_eq!(meta.get("engineering").unwrap().color, "#3B82F6");
     }
 
@@ -1859,7 +1734,7 @@ echo done
         assert_eq!(load_catalog_source(app_data.path()).await, src);
 
         // catalog.json is valid camelCase-tagged JSON.
-        let bytes = std::fs::read(catalog_source_path(app_data.path())).unwrap();
+        let bytes = std::fs::read(self::paths::catalog_source_path(app_data.path())).unwrap();
         let text = String::from_utf8_lossy(&bytes);
         assert!(
             text.contains("\"kind\": \"managed\""),
@@ -1872,7 +1747,7 @@ echo done
         let app_data = Path::new("/app/data");
         assert_eq!(
             catalog_root(app_data, &CatalogSource::Bundled),
-            corpus_dir(app_data)
+            self::paths::corpus_dir(app_data)
         );
         assert_eq!(
             catalog_root(
@@ -1940,7 +1815,7 @@ echo done
         let tmp = tempfile::tempdir().unwrap();
         let cats = discover_categories(tmp.path());
         // No divisions.json → the bundled floor (agency-categories.json) keys.
-        assert_eq!(cats, bundled_division_slugs());
+        assert_eq!(cats, self::categories::bundled_division_slugs());
         assert!(cats.contains(&"healthcare".to_string()) && cats.contains(&"gis".to_string()));
         assert!(
             !cats.contains(&"strategy".to_string()),

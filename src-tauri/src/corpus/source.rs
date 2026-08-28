@@ -14,7 +14,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{corpus_dir, state_dir};
+use super::paths::{corpus_dir, state_dir};
 use crate::error::AppError;
 use crate::types::CatalogSource;
 use crate::util::fs::atomic_write;
