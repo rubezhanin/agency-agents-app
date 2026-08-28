@@ -97,7 +97,7 @@ once_cell = "1"
 # call its macOS APIs.
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri = { version = "2", features = ["wry", "compression", "common-controls-v6", "dynamic-acl", "x11", "dbus", "macos-private-api"] }
-window-vibrancy = "0.6"
+window-vibrancy = "0.8"
 # Direct use of the Security framework for a single batched Keychain read
 # (one SecItemCopyMatching for all GitHub items → one auth prompt instead of
 # three). Pinned to "2" to unify with the version keyring already compiles.
