@@ -51,7 +51,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 dirs = "5"
 
 # Base64 encoding for cask_icon data URLs
-base64 = "0.22"
+base64 = "0.23"
 
 # v0.5.0 — install-set fingerprinting + cache-key hashing for the
 # vulnerability-scanning subsystem. SHA-256 keeps the fingerprint stable
