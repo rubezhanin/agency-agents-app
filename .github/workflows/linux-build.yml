@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Standard Tauri 2 Linux build deps (https://v2.tauri.app/start/prerequisites/)
       # plus patchelf/file/wget for the AppImage bundler, and the xdg-utils +
