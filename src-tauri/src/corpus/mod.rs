@@ -28,6 +28,8 @@
 //! which lives in a separate meta file, not the index.
 
 mod parse;
+pub mod source;
+pub mod tarball;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -35,6 +37,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::corpus::source::{catalog_root, load_catalog_source, save_catalog_source};
 use crate::error::AppError;
 use crate::github::extract_github_repo;
 use crate::types::{
@@ -75,33 +78,6 @@ fn discover_categories(root: &Path) -> Vec<String> {
 /// Extract the `AGENT_DIRS=( … )` bash array body from a shell script's text.
 /// Returns the ordered, de-duplicated directory names, or `None` if the array
 /// isn't found. Pure string work so it's unit-testable without the filesystem.
-fn parse_agent_dirs(script: &str) -> Option<Vec<String>> {
-    let start = script.find("AGENT_DIRS=(")?;
-    let after = &script[start + "AGENT_DIRS=(".len()..];
-    let end = after.find(')')?;
-    let body = &after[..end];
-
-    let mut seen = std::collections::HashSet::new();
-    let mut out = Vec::new();
-    for raw_line in body.lines() {
-        // Strip an inline comment, then split on whitespace.
-        let line = raw_line.split('#').next().unwrap_or("");
-        for tok in line.split_whitespace() {
-            // Defensive: ignore anything that isn't a plausible dir slug.
-            if tok.is_empty()
-                || !tok
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-            {
-                continue;
-            }
-            if seen.insert(tok.to_string()) {
-                out.push(tok.to_string());
-            }
-        }
-    }
-    Some(out)
-}
 
 /// GitHub `codeload` tarball for the live corpus. Streamed, gunzipped,
 /// and unpacked on [`corpus_refresh`]. No git binary required.
@@ -418,48 +394,6 @@ fn meta_path(app_data_dir: &Path) -> PathBuf {
 
 fn catalog_source_path(app_data_dir: &Path) -> PathBuf {
     state_dir(app_data_dir).join("catalog.json")
-}
-
-// ---------- Catalog source (where the corpus content lives) ----------
-
-/// Load the persisted [`CatalogSource`], or [`CatalogSource::Bundled`] when no
-/// choice has been made yet / the file is unreadable. The catalog SOURCE
-/// (content location) is distinct from the STATE dir (index/meta/ledger/backups
-/// always live under app data, regardless of source).
-pub(crate) async fn load_catalog_source(app_data_dir: &Path) -> CatalogSource {
-    let path = catalog_source_path(app_data_dir);
-    match tokio::fs::read(&path).await {
-        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_default(),
-        Err(_) => CatalogSource::default(),
-    }
-}
-
-/// Persist the chosen [`CatalogSource`] to `state/catalog.json`.
-pub(crate) async fn save_catalog_source(
-    app_data_dir: &Path,
-    source: &CatalogSource,
-) -> Result<(), AppError> {
-    let sdir = state_dir(app_data_dir);
-    tokio::fs::create_dir_all(&sdir)
-        .await
-        .map_err(|e| AppError::Io {
-            message: format!("create state dir {}: {e}", sdir.display()),
-        })?;
-    let bytes = serde_json::to_vec_pretty(source).map_err(|e| AppError::Internal {
-        message: format!("serialize catalog.json: {e}"),
-    })?;
-    atomic_write(&catalog_source_path(app_data_dir), &bytes).await
-}
-
-/// Resolve the active catalog ROOT directory (where `<category>/<slug>.md` and
-/// `scripts/convert.sh` live) for a source. `Bundled` lives inside app data;
-/// `Managed`/`UserClone` point at a clone elsewhere on disk.
-pub(crate) fn catalog_root(app_data_dir: &Path, source: &CatalogSource) -> PathBuf {
-    match source {
-        CatalogSource::Bundled => corpus_dir(app_data_dir),
-        CatalogSource::Managed { path } => PathBuf::from(path),
-        CatalogSource::UserClone { path, .. } => PathBuf::from(path),
-    }
 }
 
 // ---------- Build / load ----------
@@ -800,12 +734,13 @@ async fn refresh(app_data_dir: &Path) -> Result<CorpusMeta, AppError> {
     // Discover the live category set from the tarball's OWN tooling
     // (`scripts/convert.sh`) so a freshly-added upstream division is picked up
     // automatically. Falls back to the canonical default if absent.
-    let categories = categories_from_tarball(&bytes).unwrap_or_else(bundled_division_slugs);
+    let categories =
+        self::tarball::categories_from_tarball(&bytes).unwrap_or_else(bundled_division_slugs);
 
     // Extract the category dirs (+ the tooling) into the active catalog root.
     // The tarball has a single top-level `agency-agents-main/` prefix we strip.
     let dir = catalog_root(app_data_dir, &source);
-    let extracted = extract_categories(&bytes, &dir, &categories)?;
+    let extracted = self::tarball::extract_categories(&bytes, &dir, &categories)?;
     if extracted == 0 {
         return Err(AppError::Internal {
             message: "corpus tarball contained no agent files under known categories".into(),
@@ -884,129 +819,6 @@ async fn download_corpus_tarball() -> Result<Vec<u8>, AppError> {
         });
     }
     Ok(bytes.to_vec())
-}
-
-/// Gunzip the tarball and decode it to raw `tar` bytes, capped against a gzip
-/// bomb. Shared by [`extract_categories`] and [`categories_from_tarball`].
-fn gunzip_capped(tar_gz: &[u8]) -> Result<Vec<u8>, AppError> {
-    use std::io::Read;
-    let gz = flate2::read::GzDecoder::new(tar_gz);
-    let mut capped = gz.take(MAX_TARBALL_BYTES * 8);
-    let mut tar_bytes = Vec::new();
-    capped
-        .read_to_end(&mut tar_bytes)
-        .map_err(|e| AppError::Io {
-            message: format!("gunzip corpus tarball: {e}"),
-        })?;
-    Ok(tar_bytes)
-}
-
-/// Read `scripts/convert.sh` out of the tarball and parse its `AGENT_DIRS`
-/// array, so a refresh adopts upstream's current division set. `None` if the
-/// script isn't present or doesn't parse (caller falls back to the default).
-fn categories_from_tarball(tar_gz: &[u8]) -> Option<Vec<String>> {
-    use std::io::Read;
-    let tar_bytes = gunzip_capped(tar_gz).ok()?;
-    let mut archive = tar::Archive::new(std::io::Cursor::new(tar_bytes));
-    for entry in archive.entries().ok()? {
-        let mut entry = entry.ok()?;
-        if !entry.header().entry_type().is_file() {
-            continue;
-        }
-        let path = entry.path().ok()?;
-        let comps: Vec<String> = path
-            .components()
-            .filter_map(|c| match c {
-                std::path::Component::Normal(s) => s.to_str().map(|s| s.to_string()),
-                _ => None,
-            })
-            .collect();
-        // top/scripts/convert.sh
-        if comps.len() == 3 && comps[1] == "scripts" && comps[2] == "convert.sh" {
-            let mut text = String::new();
-            entry.read_to_string(&mut text).ok()?;
-            return parse_agent_dirs(&text).filter(|v| !v.is_empty());
-        }
-    }
-    None
-}
-
-/// Gunzip + untar `tar_gz`, writing every `<category>/<slug>.md` whose category
-/// is in `categories` into `<dest>/<category>/`, plus `scripts/convert.sh` (so
-/// the working copy stays self-describing). The codeload tarball nests
-/// everything under a single `agency-agents-main/` top-level dir, which we
-/// strip. Returns the count of agent files written.
-///
-/// Path-traversal safe: we only ever join the *sanitized* `category` +
-/// `file_name` onto `dest`; the raw archive path is never used to build a
-/// write target.
-fn extract_categories(tar_gz: &[u8], dest: &Path, categories: &[String]) -> Result<u32, AppError> {
-    use std::io::Read;
-
-    let tar_bytes = gunzip_capped(tar_gz)?;
-    let mut archive = tar::Archive::new(std::io::Cursor::new(tar_bytes));
-    let entries = archive.entries().map_err(|e| AppError::Io {
-        message: format!("read tar entries: {e}"),
-    })?;
-
-    let is_category = |c: &str| categories.iter().any(|cat| cat == c);
-    let mut written = 0u32;
-    for entry in entries {
-        let mut entry = entry.map_err(|e| AppError::Io {
-            message: format!("tar entry: {e}"),
-        })?;
-        if !entry.header().entry_type().is_file() {
-            continue;
-        }
-        let path = entry.path().map_err(|e| AppError::Io {
-            message: format!("tar entry path: {e}"),
-        })?;
-        // Strip the single top-level `agency-agents-main/` component.
-        let comps: Vec<String> = path
-            .components()
-            .filter_map(|c| match c {
-                std::path::Component::Normal(s) => s.to_str().map(|s| s.to_string()),
-                _ => None,
-            })
-            .collect();
-
-        // Persist the tooling so subsequent launches re-derive categories.
-        if comps.len() == 3 && comps[1] == "scripts" && comps[2] == "convert.sh" {
-            let scripts_dir = dest.join("scripts");
-            let _ = std::fs::create_dir_all(&scripts_dir);
-            let mut buf = Vec::new();
-            if entry.read_to_end(&mut buf).is_ok() {
-                let _ = std::fs::write(scripts_dir.join("convert.sh"), &buf);
-            }
-            continue;
-        }
-
-        if comps.len() < 3 {
-            continue; // need top/<category>/<file>
-        }
-        let category = comps[1].as_str();
-        let fname = comps.last().unwrap().as_str();
-        if !is_category(category) {
-            continue;
-        }
-        if !fname.ends_with(".md") || fname == "README.md" {
-            continue;
-        }
-        // Sanitized target — built only from validated components.
-        let cat_dir = dest.join(category);
-        std::fs::create_dir_all(&cat_dir).map_err(|e| AppError::Io {
-            message: format!("create {}: {e}", cat_dir.display()),
-        })?;
-        let mut buf = Vec::new();
-        entry.read_to_end(&mut buf).map_err(|e| AppError::Io {
-            message: format!("read tar file {}: {e}", fname),
-        })?;
-        std::fs::write(cat_dir.join(fname), &buf).map_err(|e| AppError::Io {
-            message: format!("write {}: {e}", cat_dir.join(fname).display()),
-        })?;
-        written += 1;
-    }
-    Ok(written)
 }
 
 // ---------- Small fs helper ----------
@@ -1196,8 +1008,9 @@ async fn provision_managed() -> Result<PathBuf, AppError> {
                 message: format!("create {}: {e}", path.display()),
             })?;
         let bytes = download_corpus_tarball().await?;
-        let categories = categories_from_tarball(&bytes).unwrap_or_else(bundled_division_slugs);
-        let written = extract_categories(&bytes, &path, &categories)?;
+        let categories =
+            self::tarball::categories_from_tarball(&bytes).unwrap_or_else(bundled_division_slugs);
+        let written = self::tarball::extract_categories(&bytes, &path, &categories)?;
         if written == 0 {
             return Err(AppError::Internal {
                 message: "provision: snapshot tarball contained no agent files".into(),
@@ -1598,57 +1411,11 @@ pub async fn catalog_check_updates(
 }
 
 // ---------- Runbooks (NEXUS scenario rosters) ----------
-
-/// The `strategy/runbooks.json` manifest (catalog PR #664): machine-readable
-/// NEXUS runbook rosters referenced BY SLUG (the corpus id / agent `.md` filename
-/// stem), so the app resolves each to a catalog agent and can deploy the set.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct RunbooksFile {
-    #[serde(default)]
-    runbooks: Vec<Runbook>,
-}
-
-/// One NEXUS scenario runbook: a titled, mode-sized roster grouped into teams
-/// (with activation timing), plus a pointer to its prose doc.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Runbook {
-    pub slug: String,
-    pub title: String,
-    pub mode: String,
-    pub duration: String,
-    pub summary: String,
-    pub doc: String,
-    pub roster: Vec<RunbookGroup>,
-}
-
-/// A named sub-team within a runbook (e.g. "Core Team"), its activation timing,
-/// and its member agents BY SLUG.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RunbookGroup {
-    pub group: String,
-    pub activation: String,
-    pub agents: Vec<String>,
-}
-
-/// `runbooks_list()` — the NEXUS runbook manifest from the active catalog's
-/// `strategy/runbooks.json`. Empty when the catalog is the bundled snapshot or an
-/// unsynced/pre-#664 clone (no `strategy/` on disk) — the UI treats empty as
-/// "sync to unlock", not an error. Local-only (no network).
-#[tauri::command]
-pub async fn runbooks_list(app: AppHandle) -> Result<Vec<Runbook>, AppError> {
-    let adir = app_data_dir(&app)?;
-    let source = load_catalog_source(&adir).await;
-    let root = catalog_root(&adir, &source);
-    let path = root.join("strategy").join("runbooks.json");
-    let raw = match tokio::fs::read_to_string(&path).await {
-        Ok(r) => r,
-        Err(_) => return Ok(Vec::new()), // no strategy/ (bundled / unsynced) → empty
-    };
-    let file: RunbooksFile = serde_json::from_str(&raw).map_err(|e| AppError::Io {
-        message: format!("parse strategy/runbooks.json: {e}"),
-    })?;
-    Ok(file.runbooks)
-}
+//
+// NEXUS runbook rosters (`strategy/runbooks.json` in the active catalog):
+// titled, mode-sized scenario rosters that reference catalog agents BY SLUG.
+// Schema + IPC live in [`runbooks`].
+pub mod runbooks;
 
 /// Heuristic: does `root` hold an agency-agents catalog? True if it has the
 /// repo tooling or at least one of the canonical category dirs with agents.
@@ -1700,6 +1467,8 @@ pub async fn corpus_categories(
 
 #[cfg(test)]
 mod tests {
+    use self::tarball::parse_agent_dirs;
+    use super::runbooks::RunbooksFile;
     use super::*;
 
     fn write_agent(dir: &Path, category: &str, slug: &str, name: &str, body: &str) {
