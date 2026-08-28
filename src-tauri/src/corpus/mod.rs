@@ -32,6 +32,7 @@ pub mod source;
 pub mod tarball;
 mod categories;
 mod paths;
+mod catalog_detect;
 
 use self::categories::{
     bundled_division_meta, bundled_division_slugs, CategoryMetaRow, DivisionsFile,
@@ -54,10 +55,17 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::corpus::source::{catalog_root, load_catalog_source, save_catalog_source};
+// `run_git` / `git_available` / `has_git_dir` live in `catalog_detect`
+// and are consumed by `catalog_status` / `catalog_check_updates` which
+// are still in this file. When those IPCs move out (stage C of the
+// decomposition) this import goes away.
+use crate::corpus::catalog_detect::{
+    detect_catalogs, git_available, has_git_dir, provision_managed, pull_active, run_git,
+};
 use crate::error::AppError;
 use crate::github::extract_github_repo;
 use crate::types::{
-    Agent, CatalogCandidate, CatalogDetection, CatalogSource, CatalogStatus, CatalogUpdateCheck,
+    Agent, CatalogDetection, CatalogSource, CatalogStatus, CatalogUpdateCheck,
     Category, CorpusEntry, CorpusMeta,
 };
 use crate::util::fs::atomic_write;
@@ -80,7 +88,7 @@ use crate::util::fs::atomic_write;
 /// the set of directories the indexer scans for agents; both are correct because
 /// every agent-bearing dir is a declared division and no non-division dir holds
 /// agents (enforced upstream by `check-divisions.sh`'s `NON_DIVISION_DIRS`).
-fn discover_categories(root: &Path) -> Vec<String> {
+pub(super) fn discover_categories(root: &Path) -> Vec<String> {
     let meta = std::fs::read_to_string(root.join(DIVISIONS_FILENAME))
         .ok()
         .and_then(|raw| serde_json::from_str::<DivisionsFile>(&raw).ok())
@@ -99,21 +107,6 @@ fn discover_categories(root: &Path) -> Vec<String> {
 /// and unpacked on [`corpus_refresh`]. No git binary required.
 const CORPUS_TARBALL_URL: &str =
     "https://codeload.github.com/rubezhanin/agency-agents/tar.gz/refs/heads/main";
-
-/// Git remote used to clone/pull a managed catalog when `git` is available.
-const CATALOG_GIT_URL: &str = "https://github.com/rubezhanin/agency-agents.git";
-
-/// Dev-root directory names scanned (under `$HOME`) by the "Find Agency Agents"
-/// button when looking for an existing clone.
-const SCAN_ROOTS: [&str; 7] = [
-    "Software",
-    "Projects",
-    "git",
-    "Developer",
-    "code",
-    "dev",
-    "src",
-];
 
 /// User-Agent for the refresh fetch. Mirrors the catalog refresh style.
 const USER_AGENT: &str = "agency-agents/0.1 (+https://github.com/rubezhanin/agency-agents)";
@@ -474,7 +467,7 @@ fn empty_corpus(version: &str, categories: &[String]) -> Corpus {
 // ---------- Seeding ----------
 
 /// True if `dir` does not exist or contains no entries.
-fn is_empty_dir(dir: &Path) -> bool {
+pub(super) fn is_empty_dir(dir: &Path) -> bool {
     match std::fs::read_dir(dir) {
         Ok(mut it) => it.next().is_none(),
         Err(_) => true,
@@ -593,7 +586,7 @@ async fn load_stored_meta(app_data_dir: &Path) -> Option<StoredMeta> {
 /// The extraction is done into a temp dir first, then the known category
 /// dirs are swapped in, so a partial/failed download never corrupts the
 /// live `corpus/`.
-async fn refresh(app_data_dir: &Path) -> Result<CorpusMeta, AppError> {
+pub(super) async fn refresh(app_data_dir: &Path) -> Result<CorpusMeta, AppError> {
     // A read-only catalog source (Bundled-app-data is fine to refresh; a
     // user clone we lack permission to manage is NOT) must never be written by
     // a tarball refresh. Bundled writes into app data, so it's always allowed.
@@ -657,7 +650,7 @@ async fn refresh(app_data_dir: &Path) -> Result<CorpusMeta, AppError> {
 
 /// Fetch the GitHub `codeload` tarball for the corpus (capped, timed out).
 /// Shared by [`refresh`] and managed-catalog provisioning (the git-absent path).
-async fn download_corpus_tarball() -> Result<Vec<u8>, AppError> {
+pub(super) async fn download_corpus_tarball() -> Result<Vec<u8>, AppError> {
     let client = reqwest::Client::builder()
         .timeout(REFRESH_TIMEOUT)
         .user_agent(USER_AGENT)
@@ -713,207 +706,6 @@ async fn read_capped(path: &Path, max: u64) -> Result<Vec<u8>, AppError> {
     Ok(bytes)
 }
 
-// =====================================================================
-// Catalog detection / provisioning / pull (#1 clone-as-source-of-truth)
-// =====================================================================
-
-/// `~/.agency-agents` — the default managed-catalog location (shared with the
-/// agency-agents CLI).
-fn home_agency_dir() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".agency-agents"))
-}
-
-/// Is a `git` binary on PATH? Determines clone/pull vs tarball-snapshot.
-async fn git_available() -> bool {
-    run_git(&["--version"], None).await.is_ok()
-}
-
-/// Is `root` a git checkout (so a pull is `git pull`, not a tarball swap)?
-fn has_git_dir(root: &Path) -> bool {
-    root.join(".git").exists()
-}
-
-/// Run `git` with `args` (optionally in `cwd`) off the async runtime. Errors
-/// carry git's stderr so failures are diagnosable.
-async fn run_git(args: &[&str], cwd: Option<&Path>) -> Result<String, AppError> {
-    let owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    let cwd = cwd.map(|p| p.to_path_buf());
-    let out = tokio::task::spawn_blocking(move || {
-        let mut c = std::process::Command::new("git");
-        if let Some(d) = &cwd {
-            c.current_dir(d);
-        }
-        c.args(&owned).output()
-    })
-    .await
-    .map_err(|e| AppError::Internal {
-        message: format!("join git task: {e}"),
-    })?
-    .map_err(|e| AppError::Io {
-        message: format!("spawn git: {e}"),
-    })?;
-
-    if !out.status.success() {
-        return Err(AppError::Io {
-            message: format!(
-                "git {:?} failed: {}",
-                args,
-                String::from_utf8_lossy(&out.stderr).trim()
-            ),
-        });
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-}
-
-/// Quick agent count for a candidate badge: top-level `.md` files across the
-/// root's discovered categories. Cheap + synchronous (cold path, small repo).
-fn quick_agent_count(root: &Path) -> u32 {
-    let mut n = 0u32;
-    for cat in discover_categories(root) {
-        if let Ok(rd) = std::fs::read_dir(root.join(&cat)) {
-            n += rd
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("md"))
-                .filter(|e| e.file_name().to_string_lossy() != "README.md")
-                .count() as u32;
-        }
-    }
-    n
-}
-
-/// Build a [`CatalogCandidate`] for `path` if it looks like a catalog.
-fn candidate_for(path: &Path, kind: &str) -> Option<CatalogCandidate> {
-    if !looks_like_catalog(path) {
-        return None;
-    }
-    Some(CatalogCandidate {
-        path: path.to_string_lossy().to_string(),
-        kind: kind.to_string(),
-        has_git: has_git_dir(path),
-        agent_count: quick_agent_count(path),
-    })
-}
-
-/// Detect candidate catalogs. Always checks `~/.agency-agents`; when `scan` is
-/// true also walks common dev roots for an `agency-agents` checkout (the "Find
-/// Agency Agents" button). Pure of app state — safe to call anytime.
-async fn detect_catalogs(scan: bool) -> CatalogDetection {
-    let git_available = git_available().await;
-    let mut candidates: Vec<CatalogCandidate> = Vec::new();
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let push = |c: Option<CatalogCandidate>,
-                list: &mut Vec<CatalogCandidate>,
-                seen: &mut std::collections::HashSet<String>| {
-        if let Some(c) = c {
-            if seen.insert(c.path.clone()) {
-                list.push(c);
-            }
-        }
-    };
-
-    if let Some(managed) = home_agency_dir() {
-        push(
-            candidate_for(&managed, "managed"),
-            &mut candidates,
-            &mut seen,
-        );
-    }
-
-    if scan {
-        if let Some(home) = dirs::home_dir() {
-            for root in SCAN_ROOTS {
-                // Look for `<home>/<root>/agency-agents` and a direct
-                // `<home>/<root>` that is itself a catalog.
-                let base = home.join(root);
-                push(
-                    candidate_for(&base.join("agency-agents"), "userClone"),
-                    &mut candidates,
-                    &mut seen,
-                );
-                // One level of children named with "agency" (cheap heuristic).
-                if let Ok(rd) = std::fs::read_dir(&base) {
-                    for ent in rd.filter_map(|e| e.ok()) {
-                        let p = ent.path();
-                        if p.is_dir()
-                            && p.file_name()
-                                .map(|n| n.to_string_lossy().contains("agency"))
-                                .unwrap_or(false)
-                        {
-                            push(candidate_for(&p, "userClone"), &mut candidates, &mut seen);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    CatalogDetection {
-        git_available,
-        scanned: scan,
-        candidates,
-    }
-}
-
-/// Ensure `~/.agency-agents` holds a catalog, cloning (git) or unpacking the
-/// snapshot (no git) as needed. Returns the managed root path. Idempotent: if
-/// it already looks like a catalog, this is a no-op (use pull to update).
-async fn provision_managed() -> Result<PathBuf, AppError> {
-    let path = home_agency_dir().ok_or_else(|| AppError::Io {
-        message: "cannot resolve home directory".into(),
-    })?;
-    if looks_like_catalog(&path) {
-        return Ok(path); // already provisioned
-    }
-
-    let empty = is_empty_dir(&path);
-    if git_available().await && !path.exists() {
-        // git clone into a fresh dir (clone requires absent/empty target).
-        // Full clone (not shallow) so commit history is available for accurate
-        // behind/ahead counts and diff stats in the Catalog status panel.
-        run_git(&["clone", CATALOG_GIT_URL, &path.to_string_lossy()], None).await?;
-    } else if git_available().await && empty {
-        // Full clone (not shallow) so commit history is available for accurate
-        // behind/ahead counts and diff stats in the Catalog status panel.
-        run_git(&["clone", CATALOG_GIT_URL, &path.to_string_lossy()], None).await?;
-    } else {
-        // No git (or a non-empty target): drop the snapshot tarball in place.
-        tokio::fs::create_dir_all(&path)
-            .await
-            .map_err(|e| AppError::Io {
-                message: format!("create {}: {e}", path.display()),
-            })?;
-        let bytes = download_corpus_tarball().await?;
-        let categories =
-            self::tarball::categories_from_tarball(&bytes).unwrap_or_else(bundled_division_slugs);
-        let written = self::tarball::extract_categories(&bytes, &path, &categories)?;
-        if written == 0 {
-            return Err(AppError::Internal {
-                message: "provision: snapshot tarball contained no agent files".into(),
-            });
-        }
-    }
-    Ok(path)
-}
-
-/// Pull the active catalog root up to date. Git checkout → `git pull --ff-only`;
-/// otherwise a tarball refresh into the root. Read-only sources are rejected by
-/// the caller; Bundled refreshes its app-data copy.
-async fn pull_active(app_data_dir: &Path) -> Result<(), AppError> {
-    let source = load_catalog_source(app_data_dir).await;
-    if matches!(&source, CatalogSource::UserClone { manage: false, .. }) {
-        return Err(AppError::InvalidArgument {
-            message: "catalog source is read-only (manage-with-permission is off)".into(),
-        });
-    }
-    let root = catalog_root(app_data_dir, &source);
-    if has_git_dir(&root) && git_available().await {
-        run_git(&["-C", &root.to_string_lossy(), "pull", "--ff-only"], None).await?;
-        Ok(())
-    } else {
-        // Tarball refresh writes into the active root (refresh() resolves it).
-        refresh(app_data_dir).await.map(|_| ())
-    }
-}
 
 // =====================================================================
 // Tauri commands (contracts.md §C — corpus surface)
@@ -1294,7 +1086,7 @@ pub mod runbooks;
 
 /// Heuristic: does `root` hold an agency-agents catalog? True if it has the
 /// repo tooling or at least one of the canonical category dirs with agents.
-fn looks_like_catalog(root: &Path) -> bool {
+pub(super) fn looks_like_catalog(root: &Path) -> bool {
     if root.join("scripts").join("convert.sh").exists() {
         return true;
     }
@@ -1345,6 +1137,10 @@ mod tests {
     use self::tarball::parse_agent_dirs;
     use super::runbooks::RunbooksFile;
     use super::*;
+    // The few candidate-detection tests below stayed in this file (they share
+    // fixture state with the broader corpus tests). The helpers they touch
+    // moved to `catalog_detect` in stage A of the decomposition.
+    use crate::corpus::catalog_detect::{candidate_for, quick_agent_count};
 
     fn write_agent(dir: &Path, category: &str, slug: &str, name: &str, body: &str) {
         let cat = dir.join(category);
