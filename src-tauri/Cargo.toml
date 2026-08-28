@@ -48,7 +48,7 @@ chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
 
 # OS-correct paths for ~/Library/Application Support
-dirs = "5"
+dirs = "6"
 
 # Base64 encoding for cask_icon data URLs
 base64 = "0.23"
