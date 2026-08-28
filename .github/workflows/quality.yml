@@ -78,6 +78,40 @@ jobs:
         run: npm audit --audit-level=moderate
 
   # ---------------------------------------------------------------------------
+  # Rust -> TypeScript binding drift check
+  # ---------------------------------------------------------------------------
+  # The `src/lib/types.generated.ts` file is generated from `src-tauri/src/types.rs`
+  # via `ts-rs` on every `cargo test --test ts_export` invocation. This
+  # job runs that test, then asserts the generated file matches what's
+  # committed to the repo (`git diff --exit-code`). A non-empty diff
+  # means a Rust DTO was changed without regenerating the TS bindings
+  # \u2014 the build fails, the contributor runs `cargo test --test
+  # ts_export` locally, commits the regenerated file, and the diff
+  # resolves to empty. Belt-and-suspenders for the type contract.
+  ts-rs-drift:
+    name: ts-rs drift check (Rust \u2192 TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - name: regenerate typescript bindings
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test ts_export
+      - name: assert no drift
+        # Exit code 0 if no diff, 1 if there is. `git diff --exit-code`
+        # is the right primitive: `--quiet` swallows the diff body so
+        # the log stays small even if the check fails.
+        run: |
+          if ! git diff --exit-code --quiet src/lib/types.generated.ts; then
+            echo "::error::src/lib/types.generated.ts is out of date."
+            echo "::error::Run \`cargo test --test ts_export\` locally and commit the result."
+            git diff --stat src/lib/types.generated.ts
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
   # Frontend test runner
   # ---------------------------------------------------------------------------
   vitest:
