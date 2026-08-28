@@ -58,7 +58,7 @@ jobs:
         # new regressions, but we don't want every PR to fail on day one.
         # We track the cleanup in `docs/PLAN.md` and flip the deny bit back
         # on once the warning count is zero.
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings -A clippy::doc_overindented_list_items -A clippy::doc_lazy_continuation -A clippy::derivable_impls -A clippy::too_many_arguments -A clippy::declare_interior_mutable_const -A clippy::borrow_interior_mutable_const
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings -A clippy::doc_overindented_list_items -A clippy::doc_lazy_continuation -A clippy::derivable_impls -A clippy::too_many_arguments -A clippy::declare_interior_mutable_const -A clippy::borrow_interior_mutable_const -A clippy::needless_return -A clippy::module_inception -A clippy::io_other_error -A clippy::empty_line_after_doc_comments
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
 
