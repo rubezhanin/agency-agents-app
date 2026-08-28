@@ -502,7 +502,7 @@ pub async fn read_source(
     category: &str,
     slug: &str,
 ) -> Result<String, AppError> {
-    let adir = super::app_data_dir(app)?;
+    let adir = crate::corpus::app_data_dir(app)?;
     let source = load_catalog_source(&adir).await;
     let cat_dir = catalog_root(&adir, &source).join(category);
     let fname = format!("{slug}.md");
