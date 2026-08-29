@@ -39,6 +39,7 @@ const ru = {
   "settings.network": "Сеть",
   "settings.github": "GitHub",
   "settings.activity": "Активность",
+  "settings.backups": "Резервные копии",
   "settings.about": "О приложении",
   "settings.close": "Закрыть настройки",
   "settings.paneLabel": "Настройки — {section}",
@@ -708,6 +709,24 @@ const ru = {
   "hermes.refreshStatus": "Обновить статус Hermes",
   "hermes.viewPlugin": "Открыть директорию плагина",
   "hermes.viewPluginHint": "Показать ~/.hermes/plugins/agency-agents-router/ в Проводнике/Finder.",
+  // Backups / rollback section (0.4.5)
+  "backups.title": "Резервные копии и откат",
+  "backups.description": "Каждая установка/обновление, перезаписывающая файл с другим содержимым, сначала делает снимок. Здесь можно откатить любой из них.",
+  "backups.refresh": "Обновить",
+  "backups.empty": "Резервных копий пока нет — они появятся автоматически, когда установка или обновление впервые перезапишет существующий файл.",
+  "backups.columnWhen": "Когда",
+  "backups.columnSlug": "Агент",
+  "backups.columnTool": "Инструмент",
+  "backups.columnSize": "Размер",
+  "backups.columnDest": "Исходный путь",
+  "backups.restore": "Восстановить",
+  "backups.confirmRestore": "Заменить текущий файл этой резервной копией? Текущий файл будет отброшен.",
+  "backups.restoring": "Восстановление…",
+  "backups.restoredOk": "Восстановлено {filename} в {dest}",
+  "backups.restoreFailed": "Не удалось восстановить: {error}",
+  "backups.openingFolder": "Открыть папку копий",
+  "backups.openedFolderOk": "Папка копий открыта",
+  "backups.openFolderFailed": "Не удалось открыть папку копий: {error}",
 } satisfies Partial<Messages>;
 
 export default ru;

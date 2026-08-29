@@ -37,6 +37,7 @@ const en = {
   "settings.network": "Network",
   "settings.github": "GitHub",
   "settings.activity": "Activity",
+  "settings.backups": "Backups",
   "settings.about": "About",
   "settings.close": "Close Settings",
   "settings.paneLabel": "Settings — {section}",
@@ -721,6 +722,24 @@ const en = {
   "hermes.refreshStatus": "Refresh Hermes status",
   "hermes.viewPlugin": "Open plugin directory",
   "hermes.viewPluginHint": "Reveal ~/.hermes/plugins/agency-agents-router/ in Finder/Explorer.",
+  // Backups / rollback section (0.4.5)
+  "backups.title": "Backups & Rollback",
+  "backups.description": "Every install/update that overwrites a different file takes a snapshot first. Roll back any of them here.",
+  "backups.refresh": "Refresh",
+  "backups.empty": "No backups yet — they appear automatically the first time an install/update overwrites an existing file.",
+  "backups.columnWhen": "When",
+  "backups.columnSlug": "Agent",
+  "backups.columnTool": "Tool",
+  "backups.columnSize": "Size",
+  "backups.columnDest": "Original path",
+  "backups.restore": "Restore",
+  "backups.confirmRestore": "Replace the current file with this backup? Your current file will be discarded.",
+  "backups.restoring": "Restoring…",
+  "backups.restoredOk": "Restored {filename} to {dest}",
+  "backups.restoreFailed": "Restore failed: {error}",
+  "backups.openingFolder": "Open backups folder",
+  "backups.openedFolderOk": "Opened backups folder",
+  "backups.openFolderFailed": "Could not open backups folder: {error}",
 } as const;
 
 export type MessageKey = keyof typeof en;

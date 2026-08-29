@@ -59,6 +59,18 @@ proposed: string,
 differs: boolean, };
 
 /**
+ * One entry in the per-app `backups/index.json` ledger — a snapshot of an
+ * agent file taken just before a destructive install/update wrote a new
+ * render to the same path. The list is what the rollback UI shows and
+ * `backup_restore` resolves back to a `dest`.
+ *
+ * `dest` is the absolute path the backup will be restored to; `filename`
+ * is the on-disk name inside `app_data_dir/backups/`. `created_at` is
+ * RFC3339 (matches `InstallRecord::installed_at`).
+ */
+export type BackupEntry = { filename: string, dest: string, tool: string, slug: string, createdAt: string, size: bigint, };
+
+/**
  * A catalog directory discovered on disk (for the first-run / Settings picker).
  */
 export type CatalogCandidate = { 

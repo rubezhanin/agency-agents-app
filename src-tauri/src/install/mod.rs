@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 
 use crate::corpus;
@@ -22,8 +23,8 @@ use crate::registry;
 use crate::render;
 use crate::state::AppState;
 use crate::types::{
-    AgentDiff, InstallRecord, InstallState, InstalledAgent, ProjectInfo, Tool, ToolInfo,
-    ToolVersion, UpdateKind,
+    AgentDiff, BackupEntry, InstallRecord, InstallState, InstalledAgent, ProjectInfo, Tool,
+    ToolInfo, ToolVersion, UpdateKind,
 };
 use crate::util::fs::{atomic_write, read_capped};
 use crate::util::sandbox::{resolve_safe_path, resolve_under_root_creating};
@@ -153,15 +154,20 @@ fn record_for(
 /// litter). Backup name keeps the original filename + a timestamp so it's
 /// human-recoverable. Best-effort within a still-fallible signature: a failed
 /// backup aborts the write (we never overwrite what we couldn't preserve).
+///
+/// Returns `Some(backup_path)` when a backup was actually written (so the
+/// caller can record it in `backups/index.json` for the rollback UI), or
+/// `None` when the input matched the existing bytes (or the file didn't
+/// exist yet) and no backup file was created.
 async fn backup_if_differs(
     dest: &Path,
     new_bytes: &[u8],
     backup_dir: &Path,
     stamp: &str,
-) -> Result<(), AppError> {
+) -> Result<Option<PathBuf>, AppError> {
     let existing = match tokio::fs::read(dest).await {
         Ok(b) => b,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => {
             return Err(AppError::Io {
                 message: format!("read existing file {} before backup: {e}", dest.display()),
@@ -169,7 +175,7 @@ async fn backup_if_differs(
         }
     };
     if existing == new_bytes {
-        return Ok(()); // identical → not a destructive write
+        return Ok(None); // identical → not a destructive write
     }
     tokio::fs::create_dir_all(backup_dir)
         .await
@@ -181,7 +187,175 @@ async fn backup_if_differs(
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "agent".into());
     let backup = backup_dir.join(format!("{fname}.{}.bak", fs_stamp(stamp)));
-    atomic_write(&backup, &existing).await
+    atomic_write(&backup, &existing).await?;
+    Ok(Some(backup))
+}
+
+// ---------- Backup index (rollback ledger) ----------
+//
+// `backups/index.json` lives next to the backup files and records, for
+// each one, where it should be restored to and what agent+tool made it.
+// The on-disk filename is the only thing the index doesn't store
+// (because the filename encodes the original `dest`'s basename + a
+// timestamp, and we round-trip it verbatim), so the schema is just a
+// list of `BackupEntry`. We never edit existing entries in place — the
+// install/update flows only ever append, and `restore_backup` removes
+// its own row. A power user wiping the index from disk loses the
+// rollback UI, not the backup files themselves: the bytes on disk are
+// still there to be hand-recovered.
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct BackupIndex {
+    entries: Vec<BackupEntry>,
+}
+
+fn backup_index_path(dir: &Path) -> PathBuf {
+    dir.join("index.json")
+}
+
+async fn read_backup_index(dir: &Path) -> Result<BackupIndex, AppError> {
+    let p = backup_index_path(dir);
+    match tokio::fs::read(&p).await {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| AppError::Io {
+            message: format!("parse backup index {}: {e}", p.display()),
+        }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(BackupIndex::default()),
+        Err(e) => Err(AppError::Io {
+            message: format!("read backup index {}: {e}", p.display()),
+        }),
+    }
+}
+
+async fn write_backup_index(dir: &Path, idx: &BackupIndex) -> Result<(), AppError> {
+    let p = backup_index_path(dir);
+    let bytes = serde_json::to_vec_pretty(idx).map_err(|e| AppError::Io {
+        message: format!("serialize backup index: {e}"),
+    })?;
+    atomic_write(&p, &bytes).await
+}
+
+/// Append a freshly-written `(backup_path, dest)` pair to the backup
+/// index. Called by `do_install` / `do_update` after a successful
+/// `write_agent_files_to` — the caller has the `AppHandle` and the
+/// timestamp we want stamped on the new row.
+async fn record_backup_entries(
+    app: &AppHandle,
+    backups: &[(PathBuf, PathBuf)],
+    tool: &str,
+    slug: &str,
+    created_at: &str,
+) -> Result<(), AppError> {
+    if backups.is_empty() {
+        return Ok(());
+    }
+    let dir = backups_dir(app)?;
+    let mut idx = read_backup_index(&dir).await?;
+    for (backup_path, dest) in backups {
+        let size = tokio::fs::metadata(backup_path).await.map_err(|e| AppError::Io {
+            message: format!("stat backup {}: {e}", backup_path.display()),
+        })?.len();
+        let filename = backup_path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+        idx.entries.push(BackupEntry {
+            filename,
+            dest: dest.to_string_lossy().to_string(),
+            tool: tool.to_string(),
+            slug: slug.to_string(),
+            created_at: created_at.to_string(),
+            size,
+        });
+    }
+    write_backup_index(&dir, &idx).await
+}
+
+/// IPC: absolute path of the per-app `backups/` directory. The Settings
+/// → Backups "open folder" button feeds this to `reveal_path`.
+#[tauri::command]
+pub async fn backup_folder_path(app: AppHandle) -> Result<String, AppError> {
+    Ok(backups_dir(&app)?.to_string_lossy().to_string())
+}
+
+/// IPC: list every recorded backup, newest first. Backups whose file is
+/// gone from disk (user wiped `app_data/backups/`) are filtered out — the
+/// index can outlive the files if someone hand-cleans, and the UI should
+/// only show entries that can actually be restored.
+#[tauri::command]
+pub async fn backup_list(app: AppHandle) -> Result<Vec<BackupEntry>, AppError> {
+    let dir = backups_dir(&app)?;
+    let mut idx = read_backup_index(&dir).await?;
+    // Drop rows whose backup file is gone.
+    let mut keep: Vec<BackupEntry> = Vec::with_capacity(idx.entries.len());
+    for e in idx.entries.drain(..) {
+        if dir.join(&e.filename).is_file() {
+            keep.push(e);
+        }
+    }
+    // Newest first — `created_at` is RFC3339, so lex order matches chrono order.
+    keep.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(keep)
+}
+
+/// IPC: restore a backup by filename (as returned from `backup_list`).
+/// Reads the bytes, writes them back to the recorded `dest` via
+/// `atomic_write`, and removes the row from the index. The previous
+/// file at `dest` is NOT itself backed up — by the time the user is
+/// rolling back, they have already decided that "what's on disk now" is
+/// not what they want.
+///
+/// We anchor the restore on the index (a trusted source) rather than
+/// re-validating `dest` through the sandbox, but we still refuse
+/// `dest`s that resolve outside the user's home — defense-in-depth in
+/// case a hand-edited `index.json` tries to point us at
+/// `C:\Windows\…`.
+#[tauri::command]
+pub async fn backup_restore(app: AppHandle, filename: String) -> Result<String, AppError> {
+    let dir = backups_dir(&app)?;
+    let mut idx = read_backup_index(&dir).await?;
+    let pos = idx
+        .entries
+        .iter()
+        .position(|e| e.filename == filename)
+        .ok_or_else(|| AppError::InvalidArgument {
+            message: format!("unknown backup: {filename}"),
+        })?;
+    let entry = idx.entries.remove(pos);
+    // Persist the index BEFORE touching the disk: if the write fails
+    // we still want the next call to see the entry (so the user can
+    // retry). If the index write fails, bail out — never remove the
+    // row and then fail to write it back.
+    write_backup_index(&dir, &idx).await?;
+
+    let backup_path = dir.join(&entry.filename);
+    if !backup_path.is_file() {
+        return Err(AppError::Io {
+            message: format!("backup file is gone: {}", backup_path.display()),
+        });
+    }
+    let bytes = tokio::fs::read(&backup_path).await.map_err(|e| AppError::Io {
+        message: format!("read backup {}: {e}", backup_path.display()),
+    })?;
+    let dest = PathBuf::from(&entry.dest);
+    // Defense-in-depth: refuse dests outside the user's home. The
+    // index is a trusted source but we don't want a hand-edit to
+    // turn into a privileged write.
+    let home_root = home()?;
+    if !dest.starts_with(&home_root) {
+        return Err(AppError::InvalidArgument {
+            message: format!(
+                "backup dest {} is outside the user home — refusing to restore",
+                dest.display()
+            ),
+        });
+    }
+    if let Some(parent) = dest.parent() {
+        tokio::fs::create_dir_all(parent).await.map_err(|e| AppError::Io {
+            message: format!("create {}: {e}", parent.display()),
+        })?;
+    }
+    atomic_write(&dest, &bytes).await?;
+    Ok(entry.dest)
 }
 
 // ---------- Install / update (shared core) ----------
@@ -210,7 +384,8 @@ async fn do_install(
         .iter()
         .find(|r| r.slug == slug && r.tool == tool && r.project_path == project_path)
         .map(|r| PathBuf::from(&r.dest));
-    let record = write_agent_files_to(
+    let stamp = now_iso();
+    let outcome = write_agent_files_to(
         &agent,
         &raw,
         &tool,
@@ -220,15 +395,17 @@ async fn do_install(
         &entry.source_hash,
         &entry.body_hash,
         &corpus.version(),
-        &now_iso(),
+        &stamp,
         existing_dest.as_deref(),
     )
     .await?;
 
+    record_backup_entries(app, &outcome.backups, &tool, &slug, &stamp).await?;
+
     ledger.retain(|r| !(r.slug == slug && r.tool == tool && r.project_path == project_path));
-    ledger.push(record.clone());
+    ledger.push(outcome.record.clone());
     save_ledger(app, &ledger).await?;
-    Ok(record)
+    Ok(outcome.record)
 }
 
 /// Track a recognized on-disk agent into the ledger **without writing anything**
@@ -422,7 +599,7 @@ async fn write_agent_files(
     corpus_version: &str,
     installed_at: &str,
 ) -> Result<InstallRecord, AppError> {
-    write_agent_files_to(
+    Ok(write_agent_files_to(
         agent,
         raw,
         tool,
@@ -435,7 +612,21 @@ async fn write_agent_files(
         installed_at,
         None,
     )
-    .await
+    .await?
+    .record)
+}
+
+/// The pair a successful `write_agent_files_to` returns: the ledger row
+/// (`InstallRecord`) plus the list of `(backup_path, dest)` pairs for
+/// every backup file that was actually written (only ones whose bytes
+/// differed from the incoming render). The caller — `do_install` /
+/// `do_update` — is the one that knows the `AppHandle`, so it is the
+/// one that records the backup filenames in `backups/index.json` for
+/// the rollback UI.
+#[derive(Debug)]
+struct WriteOutcome {
+    record: InstallRecord,
+    backups: Vec<(PathBuf, PathBuf)>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -451,7 +642,7 @@ async fn write_agent_files_to(
     corpus_version: &str,
     installed_at: &str,
     preferred_dest: Option<&Path>,
-) -> Result<InstallRecord, AppError> {
+) -> Result<WriteOutcome, AppError> {
     let (bytes, rendered_hash) = render::render_with_hash(agent, raw, tool)?;
     let mut paths = render::dests(tool, &agent.slug, home, project_root)?;
     if let Some(preferred) = preferred_dest {
@@ -461,9 +652,12 @@ async fn write_agent_files_to(
             paths.swap(0, index);
         }
     }
+    let mut backups: Vec<(PathBuf, PathBuf)> = Vec::new();
     for dest in &paths {
         if let Some(bdir) = backup_dir {
-            backup_if_differs(dest, bytes.as_bytes(), bdir, installed_at).await?;
+            if let Some(p) = backup_if_differs(dest, bytes.as_bytes(), bdir, installed_at).await? {
+                backups.push((p, dest.clone()));
+            }
         }
         if let Some(parent) = dest.parent() {
             tokio::fs::create_dir_all(parent)
@@ -474,17 +668,20 @@ async fn write_agent_files_to(
         }
         atomic_write(dest, bytes.as_bytes()).await?;
     }
-    Ok(record_for(
-        agent,
-        &paths[0],
-        tool,
-        project_root,
-        rendered_hash,
-        source_hash,
-        body_hash,
-        corpus_version,
-        installed_at,
-    ))
+    Ok(WriteOutcome {
+        record: record_for(
+            agent,
+            &paths[0],
+            tool,
+            project_root,
+            rendered_hash,
+            source_hash,
+            body_hash,
+            corpus_version,
+            installed_at,
+        ),
+        backups,
+    })
 }
 
 // ---------- Reconciliation core (pure, testable) ----------
@@ -1877,5 +2074,102 @@ mod tests {
         let back: Vec<InstallRecord> = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(back.len(), 1);
         assert_eq!(back[0].tool, "cursor");
+    }
+
+    // ---------- Backup index tests ----------
+
+    /// The on-disk format is `{ "entries": [ { ...BackupEntry... } ] }`
+    /// with the BackupEntry fields in camelCase (the same shape the
+    /// TS side sees via `ts-rs`). Lock the wire format here so a
+    /// future refactor doesn't silently drift.
+    #[tokio::test]
+    async fn backup_index_roundtrip_preserves_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let original = BackupIndex {
+            entries: vec![
+                BackupEntry {
+                    filename: "agent.md.2026-01-01T00-00-00.bak".into(),
+                    dest: "/home/user/.claude/agents/agent.md".into(),
+                    tool: "claudeCode".into(),
+                    slug: "frontend-architect".into(),
+                    created_at: "2026-01-01T00:00:00+00:00".into(),
+                    size: 1234,
+                },
+                BackupEntry {
+                    filename: "agent.md.2026-01-02T00-00-00.bak".into(),
+                    dest: "/home/user/.claude/agents/agent.md".into(),
+                    tool: "claudeCode".into(),
+                    slug: "frontend-architect".into(),
+                    created_at: "2026-01-02T00:00:00+00:00".into(),
+                    size: 5678,
+                },
+            ],
+        };
+        write_backup_index(dir.path(), &original).await.unwrap();
+        let back = read_backup_index(dir.path()).await.unwrap();
+        assert_eq!(back, original);
+
+        // Spot-check the JSON shape the TS side parses. `filename`,
+        // `dest`, `tool`, `slug`, `size` are single-word so they don't
+        // change; only `created_at` becomes `createdAt`.
+        let raw = tokio::fs::read(backup_index_path(dir.path())).await.unwrap();
+        let s = String::from_utf8_lossy(&raw);
+        assert!(s.contains("\"entries\""), "raw json: {s}");
+        assert!(s.contains("\"filename\""), "raw json: {s}");
+        assert!(s.contains("\"createdAt\""), "raw json: {s}");
+        assert!(s.contains("\"claudeCode\""), "raw json: {s}");
+        // The snake_case form must NOT appear in the wire output.
+        assert!(!s.contains("\"created_at\""), "raw json: {s}");
+    }
+
+    /// A fresh install has no `backups/index.json` — the read path must
+    /// not error out, it just returns an empty index so the UI shows an
+    /// empty Backups list.
+    #[tokio::test]
+    async fn backup_index_missing_returns_default() {
+        let dir = tempfile::tempdir().unwrap();
+        // Index path: dir/index.json — doesn't exist yet.
+        let idx = read_backup_index(dir.path()).await.unwrap();
+        assert!(idx.entries.is_empty());
+    }
+
+    /// `record_backup_entries` builds the row metadata from the on-disk
+    /// backup file and appends it to the index. We can't easily build
+    /// an `AppHandle` in a unit test, so this test exercises the same
+    /// shape directly: write a backup, build the entry the same way
+    /// the helper does, append to the index, and read back.
+    #[tokio::test]
+    async fn backup_record_round_trips_through_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let backup_path = dir.path().join("agent.md.2026-02-01T00-00-00.bak");
+        tokio::fs::write(&backup_path, b"OLD BYTES").await.unwrap();
+
+        // Mirror what record_backup_entries does for one row.
+        let size = tokio::fs::metadata(&backup_path).await.unwrap().len();
+        let filename = backup_path.file_name().unwrap().to_string_lossy().to_string();
+        let mut idx = read_backup_index(dir.path()).await.unwrap();
+        idx.entries.push(BackupEntry {
+            filename,
+            dest: "/home/user/.claude/agents/agent.md".into(),
+            tool: "claudeCode".into(),
+            slug: "frontend-architect".into(),
+            created_at: "2026-02-01T00:00:00+00:00".into(),
+            size,
+        });
+        idx.entries.push(BackupEntry {
+            filename: "agent.md.2026-02-02T00-00-00.bak".into(),
+            dest: "/home/user/.claude/agents/agent.md".into(),
+            tool: "claudeCode".into(),
+            slug: "frontend-architect".into(),
+            created_at: "2026-02-02T00:00:00+00:00".into(),
+            size: 99,
+        });
+        write_backup_index(dir.path(), &idx).await.unwrap();
+
+        let back = read_backup_index(dir.path()).await.unwrap();
+        assert_eq!(back.entries.len(), 2);
+        assert_eq!(back.entries[0].filename, "agent.md.2026-02-01T00-00-00.bak");
+        assert_eq!(back.entries[0].size, 9); // "OLD BYTES".len()
+        assert_eq!(back.entries[1].filename, "agent.md.2026-02-02T00-00-00.bak");
     }
 }

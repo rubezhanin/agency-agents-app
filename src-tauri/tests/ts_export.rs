@@ -15,16 +15,17 @@
 use ts_rs::TS;
 
 use rubezhanin_agency_agents_lib::types::{
-    Agent, AgentDiff, CatalogCandidate, CatalogDetection, CorpusMeta,
-    CatalogSource, CatalogStatus, CatalogUpdateCheck, Category,
-    CorpusEntry, InstallRecord, InstallState, InstalledAgent,
-    ProjectInfo, Scope, ToolInfo, ToolVersion, UpdateKind,
+    Agent, AgentDiff, BackupEntry, CatalogCandidate, CatalogDetection,
+    CatalogSource, CatalogStatus, CatalogUpdateCheck, Category, CorpusEntry,
+    CorpusMeta, InstallRecord, InstallState, InstalledAgent, ProjectInfo,
+    Scope, ToolInfo, ToolVersion, UpdateKind,
 };
 
 #[test]
 fn regenerate_typescript_bindings() {
     Agent::export_all().expect("export Agent");
     AgentDiff::export_all().expect("export AgentDiff");
+    BackupEntry::export_all().expect("export BackupEntry");
     CatalogCandidate::export_all().expect("export CatalogCandidate");
     CatalogDetection::export_all().expect("export CatalogDetection");
     CorpusMeta::export_all().expect("export CorpusMeta");

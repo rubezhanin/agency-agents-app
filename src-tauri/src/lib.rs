@@ -207,6 +207,10 @@ pub fn run() {
             install::projects_list,
             install::loadout_export,
             install::loadout_import,
+            // Phase 2b — backup / rollback UI (app_data/backups/ + index.json).
+            install::backup_list,
+            install::backup_restore,
+            install::backup_folder_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

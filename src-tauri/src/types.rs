@@ -340,6 +340,27 @@ pub struct ToolVersion {
     pub version: Option<String>,
 }
 
+/// One entry in the per-app `backups/index.json` ledger — a snapshot of an
+/// agent file taken just before a destructive install/update wrote a new
+/// render to the same path. The list is what the rollback UI shows and
+/// `backup_restore` resolves back to a `dest`.
+///
+/// `dest` is the absolute path the backup will be restored to; `filename`
+/// is the on-disk name inside `app_data_dir/backups/`. `created_at` is
+/// RFC3339 (matches `InstallRecord::installed_at`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
+pub struct BackupEntry {
+    pub filename: String,
+    pub dest: String,
+    pub tool: Tool,
+    pub slug: String,
+    pub created_at: String,
+    pub size: u64,
+}
+
 /// One category for the Discover grid. `slug` is the corpus parent dir
 /// (e.g. `"engineering"`); `icon` is a PascalCase Lucide icon name the
 /// frontend resolves via its static icon map.

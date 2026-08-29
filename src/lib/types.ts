@@ -364,8 +364,9 @@ export type SettingsSection =
   | "network"
   | "github"
   | "activity"
-  | "about"
-  | "hermes";
+  | "backups"
+  | "hermes"
+  | "about";
 
 /** Command-palette item — a verb (action). */
 export type PaletteItem =
