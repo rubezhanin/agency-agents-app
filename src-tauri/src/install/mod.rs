@@ -26,6 +26,7 @@ use crate::types::{
     ToolVersion, UpdateKind,
 };
 use crate::util::fs::{atomic_write, read_capped};
+use crate::util::sandbox::{resolve_safe_path, resolve_under_root_creating};
 
 /// Cap on an installed agent file we read back during reconciliation.
 const MAX_INSTALLED_BYTES: u64 = 4 * 1024 * 1024;
@@ -1143,7 +1144,11 @@ pub async fn loadout_export(app: AppHandle, path: String) -> Result<u32, AppErro
     let bytes = serde_json::to_vec_pretty(&af).map_err(|e| AppError::Io {
         message: format!("serialize Agentfile: {e}"),
     })?;
-    atomic_write(Path::new(&path), &bytes).await?;
+    // Sandbox: reject paths that resolve outside the user's home. The
+    // file may be new (atomic_write creates the parent), so use the
+    // `creating` variant which doesn't require the leaf to exist.
+    let safe_path = resolve_under_root_creating(&home()?, Path::new(&path))?;
+    atomic_write(&safe_path, &bytes).await?;
     Ok(n)
 }
 
@@ -1156,7 +1161,11 @@ pub async fn loadout_import(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<Vec<InstallRecord>, AppError> {
-    let bytes = read_capped(Path::new(&path), MAX_INSTALLED_BYTES).await?;
+    // Sandbox: canonicalise and require the resolved path to sit inside
+    // the user's home. The Agentfile must already exist (we're reading
+    // it), so the `resolve_safe_path` variant is the right tool.
+    let safe_path = resolve_safe_path(&home()?, Path::new(&path))?;
+    let bytes = read_capped(&safe_path, MAX_INSTALLED_BYTES).await?;
     let af: Agentfile = serde_json::from_slice(&bytes).map_err(|e| AppError::Io {
         message: format!("parse Agentfile: {e}"),
     })?;

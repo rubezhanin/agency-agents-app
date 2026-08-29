@@ -38,6 +38,7 @@ use crate::corpus::catalog::{refresh, resolve_active};
 use crate::corpus::source::{catalog_root, load_catalog_source, save_catalog_source};
 use crate::error::AppError;
 use crate::github::extract_github_repo;
+use crate::util::sandbox::resolve_safe_path;
 use crate::state::AppState;
 use crate::types::{
     Agent, CatalogDetection, CatalogSource, CatalogStatus, CatalogUpdateCheck, Category,
@@ -138,12 +139,20 @@ pub async fn catalog_source_set(
     // Validate non-bundled roots before committing to them.
     if let CatalogSource::Managed { path } | CatalogSource::UserClone { path, .. } = &source {
         let root = PathBuf::from(path);
-        if !root.is_dir() {
+        // Sandbox: canonicalise the path and require it to resolve
+        // inside the user's home. This rejects `..` traversal
+        // (e.g. `~/../etc/...`) and symlink escapes (a symlinked
+        // directory whose target lies outside `home`).
+        let home = dirs::home_dir().ok_or_else(|| AppError::Internal {
+            message: "could not resolve home directory".into(),
+        })?;
+        let canonical = resolve_safe_path(&home, &root)?;
+        if !canonical.is_dir() {
             return Err(AppError::InvalidArgument {
                 message: format!("catalog path is not a directory: {path}"),
             });
         }
-        if !looks_like_catalog(&root) {
+        if !looks_like_catalog(&canonical) {
             return Err(AppError::InvalidArgument {
                 message: format!(
                     "{path} doesn't look like an agency-agents catalog (no scripts/convert.sh or category dirs)"
