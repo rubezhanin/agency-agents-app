@@ -6,6 +6,25 @@
 **Stack:** Tauri 2, Rust, SvelteKit, Svelte 5, TypeScript  
 **License:** MIT
 
+## v1.0 Changelog (2026-08-29)
+
+Cut as `v1.0.0` (`HEAD`). Locally green; CI gate on GitHub Actions requires
+account-side fix (see release notes for `v1.0.0`).
+
+Closed since the v0.4.0 sprint plan:
+
+- **A.** Re-brand to `rubezhanin` ✅
+- **B.** Hermes plugin (full renderer + install + reconcile) ✅ (`0d3062a`)
+- **C.** CI/CD cross-platform gates (ubuntu + windows + macos, fmt + clippy + test + svelte-check + build) ✅
+- **D.** God-module decomposition ✅ (`a8aa2ce` → `6726d24`, 4 commits)
+- **E.** Features (partial):
+  - Path sandbox (`util::sandbox::resolve_safe_path`) ✅ (`1836dba`, `76a9d5f`)
+  - Rust ↔ TS type generation via `ts-rs` + drift CI ✅ (`c4e7dec`, `a0dd528`)
+  - Rollback / Time machine over `backups/index.json` ✅ (`4a0d4fa`)
+  - Accessibility pass: skip-to-content, focus return, focus-visible, sidebar keyboard nav ✅ (`13b917e`)
+  - Structured on-disk logs (Rust) + Settings → Logs UI ✅ (`3a83a60`)
+  - Schema migrations / pre-flight validation / virtual scroll / beta channel / frontend structured logging — **deferred to v1.x**
+
 ## Vision
 
 Ship a native app for browsing, installing, and tracking the `agency-agents` catalog across AI coding tools.

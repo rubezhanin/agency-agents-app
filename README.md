@@ -44,7 +44,7 @@ Agency Agents is organized around four pillars — **Agents** (who), **Tools** (
 - **Projects** — project-scoped installs with a dedicated panel and master/detail navigation, so a project gets exactly the agents and tools it needs.
 - **Install tracking** — records every app-managed install with source hash, rendered hash, tool, destination, scope, and project path where relevant.
 - **Reconciliation** — classifies installed files as current, outdated, modified, removed, or foreign by re-rendering canonical source and comparing bytes. The Dashboard surfaces what "needs attention," and the Agents pane filters to exactly those.
-- **Auto-update** — checks a signed update manifest and installs new versions in place, verified against an embedded key, with one-click install + relaunch. Live for macOS (Apple Silicon + Intel) as of v0.2.0; opt-in and gated by Settings.
+- **Auto-update** — checks a signed update manifest and installs new versions in place, verified against an embedded minisign public key, with one-click install + relaunch. Live for macOS (Apple Silicon + Intel) since v0.2.0; opt-in and gated by Settings.
 - **Tool registry** — tool knowledge lives in a single upstream-owned `tools.json` shared by the backend and frontend; adding a tool is editing one JSON entry, and installability is derived from whether the app ships a renderer for that tool's format.
 - **Dashboard** — install health, a Global-vs-Projects install sunburst, cross-tool coverage merged with the catalog-by-division view (linked hover), and deep links back into the workspace.
 - **GitHub integration** — optional OAuth Device Flow for GitHub-backed app features. Tokens are stored in the platform keychain and are never returned to the frontend.
@@ -52,6 +52,10 @@ Agency Agents is organized around four pillars — **Agents** (who), **Tools** (
 - **Cross-platform shell** — Tauri 2 + Svelte 5 frontend with native macOS chrome and opaque native windows on Windows/Linux.
 - **Multilingual UI** — 11 built-in locales: `en`, `de`, `es`, `fa`, `fr`, `ja`, `ko`, `pt-BR`, `ru`, `zh-CN`, `zh-TW`. Switch in Settings → Appearance; all categories, runbooks, and update banners are localized. New translations are contributed under `src/lib/i18n/locales/`.
 - **Hermes-aware** — ships a full plugin-style installer for the `hermes` CLI (see *Supported Install Targets* below).
+- **Backups & rollback** — every install/update that overwrites a different file takes a snapshot first into `app_data/backups/`. Settings → Backups lets the user list, tail, and roll any snapshot back to its original `dest` (path-sandboxed to the user home).
+- **Structured logs** — every `tracing` event lands in `app_data/logs/app.YYYY-MM-DD.json` (daily rotation) plus stderr. Settings → Logs shows the file list, tails the most recent, and clears the directory. The companion `ts-rs` build keeps Rust DTOs and the TypeScript frontend in lockstep — drift is a CI-failing `git diff`.
+- **Accessibility** — skip-to-content link, focus return on modal close, `:focus-visible` global ring, and roving-tabindex keyboard nav in the sidebar.
+- **Path-sandboxed IPC** — every user-supplied path (loadout import/export, catalog source picker) is canonicalised and required to resolve inside the user's home before it touches the disk.
 
 New to directing agents? See **[docs/USING-AGENTS.md](./docs/USING-AGENTS.md)** — the Playbook: how to get shipped, tested work out of the catalog (also in-app via the title-bar book icon).
 

@@ -1,7 +1,7 @@
 {
   "name": "rubezhanin-agency-agents-app",
-  "version": "0.4.0",
-  "description": "Agency Agents — a cross-platform installer for AI agents. Browse, install, and track 250+ specialized agents across every AI coding tool, including Hermes plugin targets.",
+  "version": "1.0.0",
+  "description": "Agency Agents — a cross-platform installer for AI agent catalogs. Browse, install, and track the agent personas from rubezhanin/agency-agents across every supported AI coding tool, with a first-class Hermes plugin target and per-install backup/rollback.",
   "type": "module",
   "author": "Yuri Shvets",
   "homepage": "https://github.com/rubezhanin/agency-agents-app",
