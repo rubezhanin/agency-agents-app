@@ -58,22 +58,67 @@
 
   /** Footer: live corpus size — the app's own at-a-glance status. */
   const agentCount = $derived(corpus.agents.length);
+
+  /**
+   * Keyboard navigation in the sidebar (a11y). The seven nav items
+   * implement the "roving tabindex" pattern recommended by WAI-ARIA
+   * Authoring Practices for listbox-style menus: only one item is in
+   * the natural tab order at a time (`tabindex="0"`), the rest are
+   * `tabindex="-1"`. ArrowUp / ArrowDown / Home / End move focus
+   * within the group, wrapping at the ends so a keyboard user can
+   * sweep through the sidebar without leaving the keyboard or
+   * tabbing through the whole document.
+   *
+   * We also keep the existing `aria-current="page"` on the active
+   * item so screen readers announce "current page" when focus lands
+   * on it.
+   */
+  function onNavKeydown(e: KeyboardEvent, idx: number) {
+    const total = nav.length;
+    if (
+      e.key !== "ArrowDown" &&
+      e.key !== "ArrowUp" &&
+      e.key !== "Home" &&
+      e.key !== "End"
+    ) {
+      return;
+    }
+    e.preventDefault();
+    let next = idx;
+    if (e.key === "ArrowDown") next = (idx + 1) % total;
+    else if (e.key === "ArrowUp") next = (idx - 1 + total) % total;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = total - 1;
+    // Find the next button in DOM order. The template uses an
+    // `each` block so the rendered buttons are siblings; we
+    // re-query by [data-nav-item] to stay decoupled from Svelte's
+    // internal keying.
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-nav-item]"),
+    );
+    const target = buttons[next];
+    if (!target) return;
+    // Mirror the visual `active` styling with focus so the keyboard
+    // user sees where they are.
+    target.focus();
+    // If they pressed Enter / Space the button's onclick already
+    // navigates; arrow keys are the discovery shortcut.
+  }
 </script>
 
 <aside
   class="sidebar"
   class:collapsed={ui.sidebarCollapsed}
   style="width: {ui.sidebarCollapsed ? 56 : ui.sidebarWidth}px"
-  aria-label={i18n.t("nav.primary")}
 >
   <button class="brand" onclick={() => ui.setSection("personas")} title={i18n.t("nav.homeTitle")}>
     <span class="brand-mark" aria-hidden="true">🤖</span>
     <span class="brand-name">Agency Agents</span>
   </button>
 
-  <nav>
-    <ul>
-      {#each nav as item (item.id)}
+  <nav aria-label={i18n.t("nav.primary")}>
+    <ul role="list">
+      {#each nav as item, idx (item.id)}
         {@const isActive = ui.section === item.id}
         {@const b = badge(item.id)}
         <li>
@@ -81,7 +126,10 @@
             class="nav-item"
             class:active={isActive}
             aria-current={isActive ? "page" : undefined}
+            data-nav-item
+            tabindex={isActive ? 0 : -1}
             onclick={() => ui.setSection(item.id)}
+            onkeydown={(e) => onNavKeydown(e, idx)}
             title={`${label(item.id)} (${item.shortcut})`}
           >
             <span class="ico" aria-hidden="true"><item.icon size={16} /></span>

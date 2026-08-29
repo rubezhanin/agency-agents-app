@@ -37,6 +37,11 @@
   }: Props = $props();
 
   let dialogEl: HTMLDivElement | undefined = $state();
+  /** The element that had focus when the modal opened. We restore
+      focus to it on close (a11y: keyboard users land back where they
+      triggered the modal from, not on `<body>`). Held in a let (not
+      $state) because it's a transient value, not a reactive one. */
+  let previouslyFocused: HTMLElement | null = null;
 
   const FOCUSABLE =
     "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])";
@@ -72,8 +77,28 @@
 
   $effect(() => {
     if (open && dialogEl) {
+      // Remember who had focus before we opened, so the close path
+      // can put the keyboard user back where they were. Skip when
+      // the active element is already inside the dialog (e.g. an
+      // inner modal re-opened itself) — we'd otherwise pin focus
+      // inside the dialog on close and confuse the user.
+      const active = document.activeElement as HTMLElement | null;
+      if (active && !dialogEl?.contains(active)) {
+        previouslyFocused = active;
+      }
       const target = pickInitialFocus(dialogEl);
       target?.focus();
+    } else if (!open && previouslyFocused) {
+      // Restore. Guard against the element having been removed from
+      // the DOM in the meantime — `isConnected` is the cheap check.
+      const el = previouslyFocused;
+      previouslyFocused = null;
+      // Defer one tick: the modal's outer `{#if open}` has just
+      // removed the dialog from the DOM, so the restored focus
+      // would otherwise land on `<body>`. A microtask is enough.
+      queueMicrotask(() => {
+        if (el.isConnected) el.focus();
+      });
     }
   });
 

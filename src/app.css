@@ -31,6 +31,60 @@ html, body {
 }
 
 /* ─────────────────────────────────────────────────────────────────────
+   Skip-to-content link (a11y). The first interactive element in tab
+   order; collapsed off-screen until it receives focus, then it pops
+   into the top-left as a high-contrast pill. The `not(:focus)` default
+   means it doesn't take up visual space for mouse users, while the
+   focus state is loud enough that a screen-reader / keyboard user who
+   has just tabbed into the page can see where they are. ───────────── */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 200;
+  padding: 8px 14px;
+  background: var(--color-surface-raised, #1a1a1a);
+  color: var(--color-text-primary, #f5f5f5);
+  border: 2px solid var(--color-brand, #5b8cff);
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.875rem;
+  /* Off-screen by default; jumps in on focus. */
+  transform: translateY(-200%);
+  transition: transform 0.12s ease-out;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--color-brand, #5b8cff);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Global focus-visible — keyboard-only focus ring. The default browser
+   outline fires for mouse clicks too, which is visual noise for the
+   95% mouse-only path. `:focus-visible` only triggers for keyboard /
+   programmatic focus, so mouse users see no ring and keyboard users
+   get a clear indicator. Every component that uses `outline: none`
+   needs to set its own focus-visible style, but the global default
+   here is the floor. ─────────────────────────────────────────────── */
+*:focus {
+  outline: none;
+}
+*:focus-visible {
+  outline: 2px solid var(--color-brand, #5b8cff);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+/* The `<main>` skip target — needs to be programmatically focusable
+   but should not show a focus ring (it has no semantic "here" of its
+   own, the skip is the action). */
+#main-content:focus {
+  outline: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
    Shared `.panel-head` baseline — every panel uses this class on its
    header so the bottom-border separator lines up at the exact same
    y-coordinate across Dashboard, Library, Discover, Trending, Snapshots,

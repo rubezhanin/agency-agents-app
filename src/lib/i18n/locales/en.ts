@@ -32,6 +32,7 @@ const en = {
   "titlebar.donateLabel": "Support Agency Agents on GitHub Sponsors",
   "toast.theme": "Theme: {theme}",
   "settings.title": "Settings",
+  "a11y.skipToContent": "Skip to main content",
   "settings.sections": "Settings sections",
   "settings.catalog": "Catalog",
   "settings.network": "Network",

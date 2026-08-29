@@ -34,6 +34,7 @@ const ru = {
   "titlebar.donateLabel": "Поддержать Agency Agents через GitHub Sponsors",
   "toast.theme": "Тема: {theme}",
   "settings.title": "Настройки",
+  "a11y.skipToContent": "Перейти к основному содержимому",
   "settings.sections": "Разделы настроек",
   "settings.catalog": "Каталог",
   "settings.network": "Сеть",

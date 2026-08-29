@@ -81,6 +81,15 @@
   events at the top of the window).
 -->
 
+<!--
+  Skip-to-content link (a11y). Sits at the top of the tab order; only
+  paints when focused (so it doesn't disrupt the visual layout). Lands
+  on the `<main id="main-content" tabindex="-1">` in +page.svelte — that
+  `-1` lets JS move focus there without polluting the natural tab
+  order through the page body.
+-->
+<a class="skip-link" href="#main-content">{i18n.t("a11y.skipToContent")}</a>
+
 {@render children()}
 
 {#if !catalog.configured}

@@ -219,7 +219,7 @@
         onCommit={(w) => ui.setSidebarWidth(w)}
       />
     {/if}
-    <main class="content">
+    <main class="content" id="main-content" tabindex="-1">
         <div class="section-pane">
           {#if ui.section === "dashboard"}
             <AgencyDashboard />
