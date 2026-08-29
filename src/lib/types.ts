@@ -295,104 +295,32 @@ export function appErrorMessage(e: AppErrorPayload): string {
 // camelCase.
 
 /**
- * An AI coding tool we can deploy an agent into. The 11 members are the
- * authoritative install-target set from agency-agents' `scripts/install.sh`
- * (contracts.md §B). Matches the Rust `Tool` enum (`rename_all = "camelCase"`),
- * so multi-word variants are `claudeCode` / `geminiCli` (not snake/kebab).
+ * An AI coding tool we can deploy an agent into. The id set is data-driven
+ * (see the tool registry under `$lib/data/toolRegistry`, backed by
+ * `src-tauri/data/tools/*.json`) and not enumerated here — adding a tool is
+ * adding a JSON file, not touching a Rust enum or a TS union. The Rust
+ * side is `pub type Tool = String;` in `src-tauri/src/types.rs`; ts-rs
+ * doesn't model string aliases, so this stays hand-rolled (it would be
+ * the only thing `export * from './types.generated'` couldn't replace).
  */
-/** A tool id (camelCase). The set of valid ids is data-driven — see the tool
-    registry (`$lib/data/toolRegistry`, backed by `src-tauri/data/tools/*.json`),
-    which is the single source of truth. Kept as a string alias so adding a tool
-    never touches a type union. */
 export type Tool = string;
 
-/** Deployment scope. User-global tools write to fixed `~/…` dests;
-    project-scoped tools install into a tracked `projectPath`. */
-export type Scope = "user" | "project";
+// =========================================================
+// Agency Agents — corpus subsystem (contracts.md §A)
+// =========================================================
+//
+// The 18 DTOs that mirror the Rust types in `src-tauri/src/types.rs` are
+// re-exported from the machine-generated `types.generated.ts` below.
+// That file is produced by `cargo test --test ts_export` (which drives
+// ts-rs's `export_all()` for every `#[derive(TS)]` type) and is committed
+// to the repo. A CI drift check (`quality.yml` → `ts-rs-drift` job)
+// re-runs the codegen and fails the build if the committed file
+// diverges from what was just generated. The non-DTO surface below
+// (Settings, GitHub Device Flow, AppError, Hermes plugin types, UI
+// types) is hand-rolled because it doesn't live in the Rust `types.rs`.
 
-/**
- * An agent as parsed from a single corpus `.md` file. `body` is the
- * markdown persona — empty in list views (`corpusList`) to keep payloads
- * small, populated by `corpusGet`.
- */
-export interface Agent {
-  /** Filename without `.md`, e.g. `"frontend-developer"`. */
-  slug: string;
-  /** Frontmatter `name`. */
-  name: string;
-  /** Frontmatter `description`. */
-  description: string;
-  /** Parent directory, e.g. `"engineering"`. */
-  category: string;
-  /** Frontmatter `emoji`. */
-  emoji: string | null;
-  /** Frontmatter `color` (named or hex). */
-  color: string | null;
-  /** Frontmatter `vibe`. */
-  vibe: string | null;
-  /** Markdown body (persona) — empty in list views. */
-  body: string;
-}
+export * from "./types.generated";
 
-/**
- * One row of `corpus-index.json`. The three split hashes let update
- * classification distinguish cosmetic (frontmatter-only) from substantive
- * (body) changes. Each hash is SHA-256 lowercase hex of UTF-8 bytes.
- */
-export interface CorpusEntry {
-  slug: string;
-  name: string;
-  category: string;
-  emoji: string | null;
-  color: string | null;
-  vibe: string | null;
-  description: string;
-  /** SHA-256 of the full canonical `.md`. */
-  sourceHash: string;
-  /** SHA-256 of the frontmatter block. */
-  frontmatterHash: string;
-  /** SHA-256 of the body. */
-  bodyHash: string;
-}
-
-/** Top-level metadata for the maintained corpus copy. */
-export interface CorpusMeta {
-  version: string;
-  commit: string | null;
-  fetchedAt: string;
-  count: number;
-}
-
-/**
- * Where the active agent catalog lives. Discriminated on `kind`:
- * - `bundled` — app-managed copy from the bundled baseline (default).
- * - `managed` — a clone the app provisioned/owns (default `~/.agency-agents`).
- * - `userClone` — the user's own clone; `manage` = permission to pull it.
- */
-export type CatalogSource =
-  | { kind: "bundled" }
-  | { kind: "managed"; path: string }
-  | { kind: "userClone"; path: string; manage: boolean };
-
-/** Live status of the active catalog (source + git provenance + freshness). */
-export interface CatalogStatus {
-  source: CatalogSource;
-  root: string | null;
-  isGit: boolean;
-  branch: string | null;
-  commit: string | null;
-  lastCommitSubject: string | null;
-  lastCommitDate: string | null;
-  dirtyCount: number;
-  remoteUrl: string | null;
-  /** "owner/repo" parsed from the remote, for GitHub repo stats. */
-  repoSlug: string | null;
-  version: string;
-  fetchedAt: string;
-  agentCount: number;
-}
-
-/** Result of checking the active catalog for upstream updates (diff stats). */
 /** A named sub-team within a runbook (e.g. "Core Team"), its activation timing,
     and its member agents BY SLUG (the corpus id). */
 export interface RunbookGroup {
@@ -410,153 +338,6 @@ export interface Runbook {
   summary: string;
   doc: string;
   roster: RunbookGroup[];
-}
-
-export interface CatalogUpdateCheck {
-  isGit: boolean;
-  behind: number;
-  ahead: number;
-  changedFiles: number;
-  diffstat: string;
-  upToDate: boolean;
-}
-
-/** A catalog directory discovered on disk (first-run / Settings picker). */
-export interface CatalogCandidate {
-  path: string;
-  /** "managed" for ~/.agency-agents, else "userClone". */
-  kind: "managed" | "userClone";
-  hasGit: boolean;
-  agentCount: number;
-}
-
-/** Result of `catalog_detect`. */
-export interface CatalogDetection {
-  gitAvailable: boolean;
-  scanned: boolean;
-  candidates: CatalogCandidate[];
-}
-
-/**
- * One row of `installs.json` — the ledger of local install actions.
- * `sourceHash` records the corpus version installed from; `renderedHash`
- * is the SHA-256 of the exact bytes written after per-tool conversion.
- */
-export interface InstallRecord {
-  slug: string;
-  tool: Tool;
-  scope: Scope;
-  projectPath: string | null;
-  /** Absolute path written. */
-  dest: string;
-  sourceHash: string;
-  /** SHA-256 of the agent body at install time (cosmetic vs substantive updates). */
-  bodyHash: string;
-  renderedHash: string;
-  installedAt: string;
-  corpusVersion: string;
-}
-
-/**
- * The five reconciliation states (like a package manager's installed /
- * outdated states). See systemPatterns.md §4 for the disk ↔ ledger ↔ corpus
- * classification.
- */
-export type InstallState =
-  | "current"
-  | "outdated"
-  | "modified"
-  | "removed"
-  | "foreign";
-
-/** Whether an available update is cosmetic (frontmatter/metadata only,
-    `bodyHash` unchanged) or substantive (prompt body changed). */
-export type UpdateKind = "cosmetic" | "substantive";
-
-/**
- * Reconciled view-model for the Library — one on-disk agent file resolved
- * against the ledger and corpus-index. `updateKind` is set only when
- * `state === "outdated"`.
- */
-export interface InstalledAgent {
-  slug: string;
-  name: string;
-  tool: Tool;
-  scope: Scope;
-  projectPath: string | null;
-  dest: string;
-  state: InstallState;
-  updateKind: UpdateKind | null;
-  /** True when THIS app installed it (it's in the ledger); false when the
-      reconcile found it on disk from another source (e.g. a CLI `install.sh`
-      run). Lets the UI separate "tracked by the app" from "total present". */
-  tracked: boolean;
-}
-
-/** Result of `agent_diff` — current on-disk contents vs the canonical render
-    the app would write. Powers "review before Update" with zero file writes. */
-export interface AgentDiff {
-  slug: string;
-  tool: Tool;
-  projectPath: string | null;
-  dest: string;
-  /** Current on-disk contents (null if the file is missing). */
-  onDisk: string | null;
-  /** The canonical render the app would write. */
-  proposed: string;
-  /** Whether the two differ (false ⇒ Update is a no-op). */
-  differs: boolean;
-}
-
-/** View-model for the Tools section — a detected AI tool plus its
-    deployment surface. */
-export interface ToolInfo {
-  tool: Tool;
-  label: string;
-  detected: boolean;
-  scope: Scope;
-  userDest: string | null;
-  installedCount: number;
-  /** Per-tool custom install base path the user set (else null = OS home).
-      Detection + userDest already reflect this base. */
-  customPath: string | null;
-}
-
-/** Best-effort detected version for a tool (`<bin> --version`); null when the
-    binary isn't on PATH, the probe timed out, or there's no known command. */
-export interface ToolVersion {
-  tool: Tool;
-  version: string | null;
-}
-
-/**
- * One category for the Discover grid. `slug` is the corpus parent dir
- * (e.g. `"engineering"`); `icon` is a PascalCase Lucide icon name the
- * frontend resolves via its static icon map (same convention as
- * `CategoryMeta.icon`).
- */
-export interface Category {
-  slug: string;
-  label: string;
-  icon: string;
-  /** Brand color (hex) for the division, from the catalog metadata. */
-  color: string;
-  count: number;
-}
-
-/**
- * A registered project directory for project-scoped installs. The app
- * keeps a Projects list so Library/Tools can show per-project deployment;
- * one agent in five projects = five tracked rows.
- */
-export interface ProjectInfo {
-  /** Absolute project root path. */
-  path: string;
-  /** Display label (defaults to the directory name). */
-  label: string;
-  /** Count of agents installed into this project across all
-      project-scoped tools. */
-  installedCount: number;
 }
 
 // =========================================================
