@@ -85,7 +85,8 @@ tar = "0.4"
 
 # Structured logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
 
 # URL-encoded form bodies for the GitHub Device Flow endpoints.
 # `serde_urlencoded` is already pulled in transitively by `reqwest`

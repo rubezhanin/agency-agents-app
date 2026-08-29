@@ -39,6 +39,7 @@ const en = {
   "settings.github": "GitHub",
   "settings.activity": "Activity",
   "settings.backups": "Backups",
+  "settings.logs": "Logs",
   "settings.about": "About",
   "settings.close": "Close Settings",
   "settings.paneLabel": "Settings — {section}",
@@ -741,6 +742,21 @@ const en = {
   "backups.openingFolder": "Open backups folder",
   "backups.openedFolderOk": "Opened backups folder",
   "backups.openFolderFailed": "Could not open backups folder: {error}",
+  // Logs section (0.4.7)
+  "logs.title": "Logs",
+  "logs.description": "Structured JSON logs from the app. One file per day, kept under app data. Use this when filing a bug.",
+  "logs.refresh": "Refresh",
+  "logs.clearAll": "Clear all log files",
+  "logs.confirmClear": "Delete every log file? New ones will be created automatically as the app runs.",
+  "logs.clearedOk": "Cleared {count} log file(s)",
+  "logs.clearFailed": "Could not clear logs: {error}",
+  "logs.empty": "No log files yet. They appear once the app has been running for a while.",
+  "logs.pickFile": "Pick a file on the left to see its tail.",
+  "logs.reading": "Reading…",
+  "logs.tailLabel": "Tail of selected log file",
+  "logs.openingFolder": "Open logs folder",
+  "logs.openedFolderOk": "Opened logs folder",
+  "logs.openFolderFailed": "Could not open logs folder: {error}",
 } as const;
 
 export type MessageKey = keyof typeof en;

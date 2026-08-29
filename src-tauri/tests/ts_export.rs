@@ -17,8 +17,8 @@ use ts_rs::TS;
 use rubezhanin_agency_agents_lib::types::{
     Agent, AgentDiff, BackupEntry, CatalogCandidate, CatalogDetection,
     CatalogSource, CatalogStatus, CatalogUpdateCheck, Category, CorpusEntry,
-    CorpusMeta, InstallRecord, InstallState, InstalledAgent, ProjectInfo,
-    Scope, ToolInfo, ToolVersion, UpdateKind,
+    CorpusMeta, InstallRecord, InstallState, InstalledAgent, LogFile,
+    ProjectInfo, Scope, ToolInfo, ToolVersion, UpdateKind,
 };
 
 #[test]
@@ -37,6 +37,7 @@ fn regenerate_typescript_bindings() {
     InstallRecord::export_all().expect("export InstallRecord");
     InstallState::export_all().expect("export InstallState");
     InstalledAgent::export_all().expect("export InstalledAgent");
+    LogFile::export_all().expect("export LogFile");
     ProjectInfo::export_all().expect("export ProjectInfo");
     Scope::export_all().expect("export Scope");
     ToolInfo::export_all().expect("export ToolInfo");

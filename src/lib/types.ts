@@ -365,6 +365,7 @@ export type SettingsSection =
   | "github"
   | "activity"
   | "backups"
+  | "logs"
   | "hermes"
   | "about";
 

@@ -74,14 +74,17 @@ pub fn run() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
-    // Best-effort tracing setup — silent if RUST_LOG is unset.
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                tracing_subscriber::EnvFilter::new("warn,rubezhanin_agency_agents_app=info")
-            }),
-        )
-        .try_init();
+    // Best-effort tracing setup is deferred to `setup()` so we know
+    // the app-data directory before we create the rolling file
+    // appender. The Tauri path resolver (`app.path().app_data_dir()`)
+    // is the only authoritative way to find that directory on
+    // every platform (macOS / Linux / Windows each have their own
+    // conventions and `BundleIdentifier` rules).
+    //
+    // Until `setup()` runs, log events from this process are simply
+    // dropped — that's a few microseconds of `tracing::info!` from
+    // Tauri's own bootstrap. Nothing user-facing happens in that
+    // window.
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -118,6 +121,49 @@ pub fn run() {
         })
         .setup(|app| {
             state::initialize(app)?;
+
+            // 0.4.7 — Initialise the tracing subscriber now that we
+            // have the app-data directory. Two layers: the original
+            // stderr layer (handy for `tauri dev`) and a daily-
+            // rolling JSON file under `app_data/logs/app.YYYY-MM-DD`.
+            // The frontend reads those files via the `logs_*` IPC
+            // commands (Settings → Logs).
+            use tauri::Manager;
+            use tracing_appender::rolling::{RollingFileAppender, Rotation};
+            use tracing_subscriber::{
+                fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
+            };
+            let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                EnvFilter::new("warn,rubezhanin_agency_agents_app=info")
+            });
+            // Best-effort — if the app-data dir isn't writable (e.g.
+            // running off a read-only volume in a CI harness), the
+            // stderr layer still works, the file layer just goes
+            // missing silently.
+            let logs_dir = app
+                .path()
+                .app_data_dir()
+                .map(|d| d.join("logs"))
+                .ok();
+            let file_layer = logs_dir.and_then(|dir| {
+                std::fs::create_dir_all(&dir).ok()?;
+                let appender = RollingFileAppender::new(Rotation::DAILY, dir, "app.json");
+                Some(
+                    fmt::layer()
+                        .json()
+                        .with_current_span(true)
+                        .with_span_list(false)
+                        .with_writer(appender)
+                        .with_filter(env_filter.clone()),
+                )
+            });
+            let stderr_layer = fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_filter(env_filter);
+            let _ = tracing_subscriber::registry()
+                .with(stderr_layer)
+                .with(file_layer)
+                .try_init();
             // Phase 15 — spawn the auto-check scheduler. The task
             // sleeps for 24h between wakes, re-reads the live settings
             // on each cycle (so a user toggling auto-check off mid-run
@@ -211,6 +257,11 @@ pub fn run() {
             install::backup_list,
             install::backup_restore,
             install::backup_folder_path,
+            // Phase 0.4.7 — structured logs (app_data/logs/app.YYYY-MM-DD.json).
+            commands::logs_list,
+            commands::logs_read,
+            commands::logs_clear,
+            commands::logs_folder_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

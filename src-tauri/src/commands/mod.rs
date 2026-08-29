@@ -9,6 +9,8 @@ pub mod github;
 #[allow(unused_imports)]
 pub mod hermes;
 #[allow(unused_imports)]
+pub mod logs;
+#[allow(unused_imports)]
 pub mod settings;
 #[allow(unused_imports)]
 pub mod updater;
@@ -17,6 +19,8 @@ pub mod updater;
 pub use github::*;
 #[allow(unused_imports)]
 pub use hermes::*;
+#[allow(unused_imports)]
+pub use logs::*;
 #[allow(unused_imports)]
 pub use settings::*;
 #[allow(unused_imports)]

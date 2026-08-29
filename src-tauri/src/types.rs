@@ -361,6 +361,26 @@ pub struct BackupEntry {
     pub size: u64,
 }
 
+// ---------- Logs (0.4.7) ----------
+//
+// One row per `app_data/logs/app.YYYY-MM-DD.json` file produced by the
+// `tracing-appender` rolling writer. `name` is the on-disk filename
+// (so the frontend can show "today", "yesterday", "last week" without
+// a date parse), `size` is in bytes (the UI formats it to KB/MB),
+// `created_at` is the file's modification time as RFC3339 — close
+// enough to "when did the file first roll" for human consumption.
+
+/// One log file in the per-app `logs/` directory.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[derive(TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
+pub struct LogFile {
+    pub name: String,
+    pub size: u64,
+    pub created_at: String,
+}
+
 /// One category for the Discover grid. `slug` is the corpus parent dir
 /// (e.g. `"engineering"`); `icon` is a PascalCase Lucide icon name the
 /// frontend resolves via its static icon map.

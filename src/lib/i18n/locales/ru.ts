@@ -41,6 +41,7 @@ const ru = {
   "settings.github": "GitHub",
   "settings.activity": "Активность",
   "settings.backups": "Резервные копии",
+  "settings.logs": "Логи",
   "settings.about": "О приложении",
   "settings.close": "Закрыть настройки",
   "settings.paneLabel": "Настройки — {section}",
@@ -728,6 +729,21 @@ const ru = {
   "backups.openingFolder": "Открыть папку копий",
   "backups.openedFolderOk": "Папка копий открыта",
   "backups.openFolderFailed": "Не удалось открыть папку копий: {error}",
+  // Logs section (0.4.7)
+  "logs.title": "Логи",
+  "logs.description": "Структурированные JSON-логи приложения. По файлу на день, хранятся в данных приложения. Используйте при составлении bug-репорта.",
+  "logs.refresh": "Обновить",
+  "logs.clearAll": "Очистить все лог-файлы",
+  "logs.confirmClear": "Удалить все лог-файлы? Новые будут создаваться автоматически по мере работы приложения.",
+  "logs.clearedOk": "Удалено лог-файлов: {count}",
+  "logs.clearFailed": "Не удалось очистить логи: {error}",
+  "logs.empty": "Лог-файлов пока нет. Они появятся, когда приложение поработает какое-то время.",
+  "logs.pickFile": "Выберите файл слева, чтобы увидеть его хвост.",
+  "logs.reading": "Чтение…",
+  "logs.tailLabel": "Хвост выбранного лог-файла",
+  "logs.openingFolder": "Открыть папку логов",
+  "logs.openedFolderOk": "Папка логов открыта",
+  "logs.openFolderFailed": "Не удалось открыть папку логов: {error}",
 } satisfies Partial<Messages>;
 
 export default ru;

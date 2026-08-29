@@ -27,6 +27,7 @@
   import Info from "@lucide/svelte/icons/info";
   import Plug from "@lucide/svelte/icons/plug";
   import History from "@lucide/svelte/icons/history";
+  import FileText from "@lucide/svelte/icons/file-text";
 
   import { ui } from "$lib/stores/ui.svelte";
   import SettingsSectionAppearance from "./SettingsSectionAppearance.svelte";
@@ -35,6 +36,7 @@
   import SettingsSectionGitHub from "./SettingsSectionGitHub.svelte";
   import SettingsSectionActivity from "./SettingsSectionActivity.svelte";
   import SettingsSectionBackups from "./SettingsSectionBackups.svelte";
+  import SettingsSectionLogs from "./SettingsSectionLogs.svelte";
   import SettingsSectionAbout from "./SettingsSectionAbout.svelte";
   import SettingsSectionHermes from "./SettingsSectionHermes.svelte";
   import { i18n } from "$lib/stores/i18n.svelte";
@@ -52,6 +54,7 @@
     { id: "github",     icon: Github },
     { id: "activity",   icon: Activity },
     { id: "backups",    icon: History },
+    { id: "logs",       icon: FileText },
     { id: "hermes",     icon: Plug },
     { id: "about",      icon: Info },
   ];
@@ -66,6 +69,7 @@
     if (id === "github") return i18n.t("settings.github");
     if (id === "activity") return i18n.t("settings.activity");
     if (id === "backups") return i18n.t("settings.backups");
+    if (id === "logs") return i18n.t("settings.logs");
     if (id === "hermes") return i18n.t("hermes.pluginName");
     return i18n.t("settings.about");
   }
@@ -182,6 +186,8 @@
           <SettingsSectionActivity />
         {:else if activeSection === "backups"}
           <SettingsSectionBackups />
+        {:else if activeSection === "logs"}
+          <SettingsSectionLogs />
         {:else if activeSection === "hermes"}
           <SettingsSectionHermes />
         {:else if activeSection === "about"}

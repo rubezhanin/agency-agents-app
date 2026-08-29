@@ -242,6 +242,11 @@ export type InstalledAgent = { slug: string, name: string, tool: string, scope: 
 tracked: boolean, };
 
 /**
+ * One log file in the per-app `logs/` directory.
+ */
+export type LogFile = { name: string, size: bigint, createdAt: string, };
+
+/**
  * A registered project directory for project-scoped installs. The app
  * keeps a Projects list so Library/Tools can show per-project
  * deployment; one agent in five projects = five tracked rows.
