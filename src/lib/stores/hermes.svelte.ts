@@ -18,6 +18,7 @@ import type {
   HermesProbe,
   HermesInstallResult,
   HermesPreflight,
+  HermesInstalledPlugin,
   PreflightCheck,
   PreflightStatus,
   RenderableAgent,
@@ -33,6 +34,11 @@ class HermesStore {
   preflight: HermesPreflight | null = $state(null);
   /** True while a preflight check is in flight. */
   preflighting: boolean = $state(false);
+  /** Every installed plugin under `~/.hermes/plugins/`. Cached after
+   * each refresh; `null` until the first scan. */
+  installedPlugins: HermesInstalledPlugin[] = $state([]);
+  /** True while the installed-plugins scan is in flight. */
+  listingPlugins: boolean = $state(false);
   /** Most recent install result, or `null`. Persisted in memory only. */
   lastInstall: HermesInstallResult | null = $state(null);
   /** True while a status probe is in flight. */
@@ -86,6 +92,28 @@ class HermesStore {
   }
 
   /**
+   * Scan `~/.hermes/plugins/` and return every installed plugin.
+   * Used by the multi-plugin UI (Phase 4b) to render the per-plugin
+   * table; the canonical `agency-agents-router` is listed alongside
+   * any custom division plugins.
+   */
+  async listInstalledPlugins(): Promise<HermesInstalledPlugin[]> {
+    if (this.listingPlugins) return this.installedPlugins;
+    this.listingPlugins = true;
+    this.lastError = null;
+    try {
+      const plugins = await invoke<HermesInstalledPlugin[]>("hermes_list_plugins");
+      this.installedPlugins = plugins;
+      return plugins;
+    } catch (e) {
+      this.lastError = String(e);
+      return this.installedPlugins;
+    } finally {
+      this.listingPlugins = false;
+    }
+  }
+
+  /**
    * Pick the first failing check (status === "fail"). Used by the UI to
    * highlight the most urgent remediation in a banner.
    */
@@ -121,17 +149,27 @@ class HermesStore {
   }
 
   /**
-   * Install the `agency-agents-router` plugin into the canonical user
-   * location (`~/.hermes/plugins/agency-agents-router/`). Refreshes the
-   * install record cache and emits an activity event on success.
+   * Install the canonical `agency-agents-router` plugin (or a custom
+   * plugin when `pluginId` is set). Refreshes the installed-plugins
+   * list on success so the multi-plugin table updates immediately.
    */
-  async install(agents: RenderableAgent[], catalogRef: string): Promise<HermesInstallResult | null> {
+  async install(
+    agents: RenderableAgent[],
+    catalogRef: string,
+    pluginId?: string,
+    pluginLabel?: string,
+  ): Promise<HermesInstallResult | null> {
     if (this.busy) return null;
     this.busy = true;
     this.lastError = null;
     try {
       const result = await invoke<HermesInstallResult>("hermes_install", {
-        request: { agents, catalogRef },
+        request: {
+          agents,
+          catalogRef,
+          pluginId: pluginId ?? null,
+          pluginLabel: pluginLabel ?? null,
+        },
       });
       this.lastInstall = result;
       activity.log({
@@ -141,6 +179,7 @@ class HermesStore {
           + " — " + result.installRoot,
       });
       toast.success(i18n.t("hermes.installSuccess", { count: result.agentCount }));
+      void this.listInstalledPlugins();
       return result;
     } catch (e) {
       this.lastError = String(e);
@@ -155,19 +194,28 @@ class HermesStore {
    * Stage the plugin into a user-picked directory (so they can run
    * `hermes plugin install <path>` themselves). The frontend uses
    * `@tauri-apps/plugin-dialog`'s `open({ directory: true })` to pick
-   * the destination, then passes the path here.
+   * the destination, then passes the path here. When `pluginId` is
+   * set, the staged manifest is labelled accordingly.
    */
   async stage(
     agents: RenderableAgent[],
     catalogRef: string,
     dest: string,
+    pluginId?: string,
+    pluginLabel?: string,
   ): Promise<HermesInstallResult | null> {
     if (this.busy) return null;
     this.busy = true;
     this.lastError = null;
     try {
       const result = await invoke<HermesInstallResult>("hermes_stage", {
-        request: { agents, catalogRef, dest },
+        request: {
+          agents,
+          catalogRef,
+          dest,
+          pluginId: pluginId ?? null,
+          pluginLabel: pluginLabel ?? null,
+        },
       });
       this.lastInstall = result;
       activity.log({
@@ -187,13 +235,17 @@ class HermesStore {
     }
   }
 
-  /** Remove the installed plugin directory. Idempotent. */
-  async uninstall(): Promise<boolean> {
+  /** Remove an installed plugin. `pluginId` defaults to the canonical
+   * `agency-agents-router` when omitted. Refreshes the installed-
+   * plugins list on success. Idempotent. */
+  async uninstall(pluginId?: string): Promise<boolean> {
     if (this.busy) return false;
     this.busy = true;
     this.lastError = null;
     try {
-      await invoke<void>("hermes_uninstall");
+      await invoke<void>("hermes_uninstall", {
+        request: pluginId ? { pluginId } : null,
+      });
       this.lastInstall = null;
       activity.log({
         action: "uninstall",
@@ -201,6 +253,7 @@ class HermesStore {
         detail: i18n.t("hermes.uninstallSuccess"),
       });
       toast.success(i18n.t("hermes.uninstallSuccess"));
+      void this.listInstalledPlugins();
       return true;
     } catch (e) {
       this.lastError = String(e);

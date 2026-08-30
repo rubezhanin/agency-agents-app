@@ -47,6 +47,10 @@ pub use crate::hermes::{
     HermesPreflight as CrateRootHermesPreflight, PreflightCheck as CrateRootPreflightCheck,
     PreflightStatus as CrateRootPreflightStatus,
 };
+// Re-export the Hermes installed-plugin DTO (Phase 4b — multi-plugin
+// routing). Lives in `commands::hermes` so the ts-rs integration test
+// reaches it via the same crate-root alias pattern.
+pub use crate::commands::hermes::HermesInstalledPlugin as CrateRootHermesInstalledPlugin;
 
 use commands::*;
 
@@ -297,6 +301,10 @@ pub fn run() {
             // buttons but surfaces a colour-coded checklist in the
             // Settings → Hermes tile.
             commands::hermes::hermes_preflight,
+            // Phase 4b — multi-plugin routing: scan
+            // `~/.hermes/plugins/` and return a per-plugin summary
+            // (id, label, path, agent count, canonical flag).
+            commands::hermes::hermes_list_plugins,
             // Phase 1 — corpus subsystem (contracts.md §C). These live in
             // the `corpus` module rather than `commands::*`; register them
             // fully-qualified alongside the other commands.

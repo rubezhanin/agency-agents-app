@@ -48,6 +48,8 @@ use rubezhanin_agency_agents_lib::{
     CrateRootPreflightCheck as PreflightCheck,
     CrateRootPreflightStatus as PreflightStatus,
 };
+// Hermes installed plugin (Phase 4b).
+use rubezhanin_agency_agents_lib::CrateRootHermesInstalledPlugin as HermesInstalledPlugin;
 
 #[test]
 fn regenerate_typescript_bindings() {
@@ -83,4 +85,6 @@ fn regenerate_typescript_bindings() {
     HermesPreflight::export_all().expect("export HermesPreflight");
     PreflightCheck::export_all().expect("export PreflightCheck");
     PreflightStatus::export_all().expect("export PreflightStatus");
+    // Phase 4b — multi-plugin routing.
+    HermesInstalledPlugin::export_all().expect("export HermesInstalledPlugin");
 }

@@ -28,6 +28,8 @@
   import CheckCircle from "@lucide/svelte/icons/check-circle-2";
   import XCircle from "@lucide/svelte/icons/x-circle";
   import AlertCircle from "@lucide/svelte/icons/circle-alert";
+  import Plus from "@lucide/svelte/icons/plus";
+  import Package from "@lucide/svelte/icons/package";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
   import Trash2 from "@lucide/svelte/icons/trash-2";
@@ -38,6 +40,7 @@
   import { hermes } from "$lib/stores/hermes.svelte";
   import { corpus } from "$lib/stores/corpus.svelte";
   import { i18n } from "$lib/stores/i18n.svelte";
+  import { toast } from "$lib/stores/toast.svelte";
   import type { RenderableAgent } from "$lib/types";
 
   /**
@@ -66,11 +69,29 @@
   onMount(() => {
     void hermes.refreshStatus();
     void hermes.refreshPreflight();
+    void hermes.listInstalledPlugins();
   });
 
   async function handleInstall() {
     if (renderableAgents.length === 0) return;
     await hermes.install(renderableAgents, catalogRef);
+  }
+
+  async function handleInstallCustom() {
+    if (renderableAgents.length === 0) return;
+    const pluginId = (
+      window.prompt(i18n.t("hermes.customPluginIdPrompt"), "engineering-team") ?? ""
+    ).trim();
+    if (!pluginId) return;
+    if (!/^[a-z0-9-]+$/.test(pluginId)) {
+      toast.error(i18n.t("hermes.customPluginIdInvalid"));
+      return;
+    }
+    const pluginLabel = (
+      window.prompt(i18n.t("hermes.customPluginLabelPrompt"), "Engineering Team") ?? ""
+    ).trim();
+    if (!pluginLabel) return;
+    await hermes.install(renderableAgents, catalogRef, pluginId, pluginLabel);
   }
 
   async function handleStage() {
@@ -87,6 +108,11 @@
   async function handleUninstall() {
     if (!confirm(i18n.t("hermes.uninstallHint"))) return;
     await hermes.uninstall();
+  }
+
+  async function handleUninstallPlugin(pluginId: string) {
+    if (!confirm(i18n.t("hermes.uninstallPluginHint", { id: pluginId }))) return;
+    await hermes.uninstall(pluginId);
   }
 </script>
 
@@ -262,6 +288,16 @@
           type="button"
           class="secondary"
           disabled={hermes.busy}
+          onclick={handleInstallCustom}
+          title={i18n.t("hermes.installCustomHint")}
+        >
+          <Plus size={14} />
+          <span>{i18n.t("hermes.installCustom")}</span>
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          disabled={hermes.busy}
           onclick={handleStage}
         >
           <FolderOpen size={14} />
@@ -277,6 +313,62 @@
           <span>{hermes.busy ? i18n.t("hermes.uninstalling") : i18n.t("hermes.uninstall")}</span>
         </button>
       </div>
+    {/if}
+  </div>
+
+  <!-- Installed plugins (Phase 4b — multi-plugin routing) -->
+  <div class="card">
+    <div class="card-head">
+      <h3>{i18n.t("hermes.installedPluginsTitle")}</h3>
+      <button
+        type="button"
+        class="iconbtn"
+        title={i18n.t("hermes.refreshPlugins")}
+        disabled={hermes.listingPlugins}
+        onclick={() => hermes.listInstalledPlugins()}
+      >
+        <RefreshCw size={14} class={hermes.listingPlugins ? "spin" : ""} />
+      </button>
+    </div>
+
+    {#if hermes.installedPlugins.length === 0}
+      <div class="status-row missing">
+        <Package size={16} />
+        <span>{i18n.t("hermes.installedPluginsEmpty")}</span>
+      </div>
+    {:else}
+      <ul class="plugins">
+        {#each hermes.installedPlugins as p (p.pluginId)}
+          <li class="plugin" data-canonical={p.isCanonical}>
+            <div class="plugin-main">
+              <div class="plugin-id">
+                <Package size={14} />
+                <span class="mono">{p.pluginId}</span>
+                {#if p.isCanonical}
+                  <span class="canonical-tag">{i18n.t("hermes.canonical")}</span>
+                {/if}
+              </div>
+              {#if p.label && p.label !== p.pluginId}
+                <p class="plugin-label">{p.label}</p>
+              {/if}
+              <p class="plugin-meta mono">
+                <span>{p.agentCount} agents</span>
+                <span class="sep">·</span>
+                <span class="path">{p.path}</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              class="iconbtn danger"
+              title={i18n.t("hermes.uninstallPlugin", { id: p.pluginId })}
+              disabled={hermes.busy}
+              onclick={() => handleUninstallPlugin(p.pluginId)}
+            >
+              <Trash2 size={14} />
+            </button>
+          </li>
+        {/each}
+      </ul>
     {/if}
   </div>
 </div>
@@ -513,5 +605,70 @@
     color: var(--color-text-muted);
     margin: 0;
     line-height: var(--lh-normal);
+  }
+
+  /* Installed plugins (Phase 4b) */
+  .plugins {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-2);
+  }
+  .plugin {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-2);
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+  .plugin[data-canonical="true"] {
+    border-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
+  }
+  .plugin-main { min-width: 0; }
+  .plugin-id {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-body-sm);
+    color: var(--color-text-primary);
+    font-weight: var(--fw-medium);
+  }
+  .canonical-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-brand) 18%, transparent);
+    color: var(--color-brand);
+    font-size: var(--text-caption);
+    font-weight: var(--fw-semibold);
+  }
+  .plugin-label {
+    font-size: var(--text-caption);
+    color: var(--color-text-secondary);
+    margin: 2px 0 0 0;
+  }
+  .plugin-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: var(--text-caption);
+    color: var(--color-text-muted);
+    margin: 2px 0 0 0;
+    word-break: break-all;
+  }
+  .plugin-meta .sep { opacity: 0.6; }
+  .plugin-meta .path { opacity: 0.85; }
+  .iconbtn.danger { color: var(--color-danger); }
+  .iconbtn.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    color: var(--color-danger);
   }
 </style>
