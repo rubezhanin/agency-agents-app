@@ -202,6 +202,10 @@ bodyHash: string, };
  */
 export type CorpusMeta = { version: string, commit: string | null, fetchedAt: string, count: number, };
 
+export type DestPatterns = { user: Array<string>, project: Array<string>, };
+
+export type Detect = { dirs: Array<string>, agentsDir: string | null, };
+
 /**
  * One row of `installs.json` — the ledger of local install actions.
  * `source_hash` records the corpus version installed from;
@@ -303,6 +307,90 @@ warnings: Array<string>, };
  */
 export type Scope = "user" | "project";
 
+export type ScopeCaps = { user: boolean, project: boolean, };
+
+/**
+ * One tool entry from the catalog. The schema is **strict** —
+ * every required field must be present, otherwise loading
+ * fails with a typed error. This is a deliberate change from
+ * the loose `registry::ToolSpec`, where most fields were
+ * optional.
+ */
+export type ToolEntry = { 
+/**
+ * camelCase wire value (e.g. `claudeCode`). Must be unique
+ * across the manifest.
+ */
+id: string, 
+/**
+ * Human label shown in the UI (e.g. "Claude Code").
+ */
+label: string, 
+/**
+ * Short label for the sidebar / dense layouts.
+ */
+short: string, 
+/**
+ * Stable on-disk key (e.g. `claude-code`). Must be
+ * unique; this is the dict key in `tools.json`.
+ */
+kebab: string, 
+/**
+ * Brand colour (hex). Optional — older entries may omit.
+ */
+accent: string | null, 
+/**
+ * Icon name (resolved by the frontend icon map).
+ */
+icon: string | null, 
+/**
+ * Sort order in the Tools panel.
+ */
+order: number, 
+/**
+ * Where the tool can deploy.
+ */
+scope: ScopeCaps, 
+/**
+ * Detection hints.
+ */
+detect: Detect, 
+/**
+ * Probe command for the local version.
+ */
+version: VersionProbe | null, 
+/**
+ * Renderer contract. The same `format` name guarantees
+ * byte-identical output across tools.
+ */
+format: string, 
+/**
+ * How the slug is derived for this tool. `name` = use
+ * the agent's `name` frontmatter, `source` = use the
+ * file basename, `null` (omitted) = no per-agent slug
+ * (roster / plugin). Stored as a raw string and validated
+ * post-parse so the bundled `tools.json` (which uses
+ * kebab values like `per-agent`) doesn't have to be
+ * rewritten for this spike. Phase 3 (plugin architecture)
+ * will decide which form is canonical.
+ */
+slugFrom: string | null, 
+/**
+ * Optional prefix on the slug (e.g. `agency-` for
+ * `osaurus` so the dir is `~/.osaurus/skills/agency-foo/`).
+ */
+slugPrefix: string | null, 
+/**
+ * Destination patterns, one per supported scope.
+ */
+dest: DestPatterns, 
+/**
+ * Install mechanism. Stored as a raw string and validated
+ * post-parse; see `KNOWN_INSTALL_KINDS` and the
+ * `validator()` pass.
+ */
+installKind: string, };
+
 /**
  * View-model for the Tools section — a detected AI tool plus its
  * deployment surface.
@@ -313,6 +401,27 @@ export type ToolInfo = { tool: string, label: string, detected: boolean, scope: 
  * OS home). Detection + `user_dest` already reflect this base.
  */
 customPath: string | null, };
+
+/**
+ * Validated tool manifest. Loaded once at startup (or on
+ * Settings → Catalog → "Refresh manifest" click) and re-used.
+ * Mutation is rare enough that we don't bother with a
+ * `Mutex` / `RwLock` — readers either see the old or the new.
+ */
+export type ToolManifest = { 
+/**
+ * Map of `kebab` → entry. We key on `kebab` (not `id`)
+ * because `kebab` is the on-disk / catalog-stable key
+ * (e.g. `claude-code`); `id` is the camelCase wire value
+ * (`claudeCode`) the frontend uses.
+ */
+tools: { [key in string]?: ToolEntry }, 
+/**
+ * Loader-level warnings: non-fatal but worth surfacing
+ * (e.g. an unknown `format` that the app can't render).
+ * Populated by the validator, not the deserialiser.
+ */
+warnings: Array<string>, };
 
 /**
  * Best-effort detected version string for a tool, from probing `<bin>
@@ -326,3 +435,5 @@ export type ToolVersion = { tool: string, version: string | null, };
  * `body_hash` unchanged) or substantive (prompt body changed).
  */
 export type UpdateKind = "cosmetic" | "substantive";
+
+export type VersionProbe = { bin: string, args: Array<string>, };

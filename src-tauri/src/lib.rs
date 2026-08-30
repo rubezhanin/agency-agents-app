@@ -11,6 +11,7 @@ mod error;
 mod github;
 mod hermes;
 mod install;
+mod manifest;
 mod registry;
 mod render;
 mod state;
@@ -31,6 +32,11 @@ mod util;
 pub use crate::install::recovery::{
     RecoveryAction as CrateRootRecoveryAction, RecoveryReport as CrateRootRecoveryReport,
 };
+// Re-export the upstream tool manifest types at the crate
+// root for the same reason. Phase 3 (plugin architecture) will
+// fold `manifest` and `registry` into one surface and these
+// crate-root aliases will go away.
+pub use crate::manifest::{ToolEntry as CrateRootToolEntry, ToolManifest as CrateRootToolManifest};
 
 use commands::*;
 

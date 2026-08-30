@@ -20,6 +20,13 @@ use rubezhanin_agency_agents_lib::types::{
     CorpusMeta, InstallRecord, InstallState, InstalledAgent, LogFile,
     ProjectInfo, Scope, ToolInfo, ToolVersion, UpdateKind,
 };
+// `install_kind` and `slug_from` are raw `String` fields on
+// `ToolEntry` (validated post-parse so the bundled `tools.json`
+// doesn't have to be rewritten for Phase 2). ts-rs exports
+// those via the `ToolEntry` type itself; we import the whole
+// type rather than the per-field string aliases.
+use rubezhanin_agency_agents_lib::CrateRootToolEntry as ToolEntry;
+use rubezhanin_agency_agents_lib::CrateRootToolManifest as ToolManifest;
 // Recovery types live behind the private `install` module. The
 // `lib.rs`-root `pub use` re-exports them under the alias names
 // `CrateRoot*`; we import those here, then `export_all` on them
@@ -50,7 +57,9 @@ fn regenerate_typescript_bindings() {
     RecoveryAction::export_all().expect("export RecoveryAction");
     RecoveryReport::export_all().expect("export RecoveryReport");
     Scope::export_all().expect("export Scope");
+    ToolEntry::export_all().expect("export ToolEntry");
     ToolInfo::export_all().expect("export ToolInfo");
+    ToolManifest::export_all().expect("export ToolManifest");
     ToolVersion::export_all().expect("export ToolVersion");
     UpdateKind::export_all().expect("export UpdateKind");
 }
