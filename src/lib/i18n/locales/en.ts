@@ -743,6 +743,11 @@ const en = {
   "hermes.canonical": "canonical",
   "hermes.uninstallPlugin": "Uninstall plugin {id}",
   "hermes.uninstallPluginHint": "Remove ~/.hermes/plugins/{id}/?",
+  "hermes.healthOk": "Healthy",
+  "hermes.healthDegraded": "Degraded",
+  "hermes.healthDown": "Down",
+  "hermes.healthUnknown": "Unknown",
+  "hermes.healthCheckedAt": "checked {when}",
   "hermes.viewPluginHint": "Reveal ~/.hermes/plugins/agency-agents-router/ in Finder/Explorer.",
   // Backups / rollback section (0.4.5)
   "backups.title": "Backups & Rollback",

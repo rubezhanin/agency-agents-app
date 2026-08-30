@@ -47,10 +47,17 @@ pub use crate::hermes::{
     HermesPreflight as CrateRootHermesPreflight, PreflightCheck as CrateRootPreflightCheck,
     PreflightStatus as CrateRootPreflightStatus,
 };
+// Re-export the Hermes probe + probe source for the same reason
+// (Phase 4c — HermesHealthSnapshot embeds both).
+pub use crate::hermes::probe::{HermesProbe as CrateRootHermesProbe, ProbeSource as CrateRootProbeSource};
 // Re-export the Hermes installed-plugin DTO (Phase 4b — multi-plugin
 // routing). Lives in `commands::hermes` so the ts-rs integration test
 // reaches it via the same crate-root alias pattern.
-pub use crate::commands::hermes::HermesInstalledPlugin as CrateRootHermesInstalledPlugin;
+pub use crate::commands::hermes::{
+    HermesHealthSnapshot as CrateRootHermesHealthSnapshot,
+    HermesHealthStatus as CrateRootHermesHealthStatus,
+    HermesInstalledPlugin as CrateRootHermesInstalledPlugin,
+};
 
 use commands::*;
 
@@ -305,6 +312,11 @@ pub fn run() {
             // `~/.hermes/plugins/` and return a per-plugin summary
             // (id, label, path, agent count, canonical flag).
             commands::hermes::hermes_list_plugins,
+            // Phase 4c — aggregated health snapshot (probe + preflight +
+            // installed plugins in a single round-trip). The frontend
+            // polls this on a 60s timer while the Hermes settings
+            // section is mounted.
+            commands::hermes::hermes_health,
             // Phase 1 — corpus subsystem (contracts.md §C). These live in
             // the `corpus` module rather than `commands::*`; register them
             // fully-qualified alongside the other commands.

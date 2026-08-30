@@ -48,8 +48,17 @@ use rubezhanin_agency_agents_lib::{
     CrateRootPreflightCheck as PreflightCheck,
     CrateRootPreflightStatus as PreflightStatus,
 };
+// Hermes probe (Phase 4c — needed for the HermesHealthSnapshot embed).
+// `ProbeSource` is also referenced by the new HermesProbe; both
+// must be exported or the drift check sees a stale `types.generated.ts`.
+use rubezhanin_agency_agents_lib::CrateRootProbeSource as ProbeSource;
 // Hermes installed plugin (Phase 4b).
 use rubezhanin_agency_agents_lib::CrateRootHermesInstalledPlugin as HermesInstalledPlugin;
+// Hermes health snapshot (Phase 4c).
+use rubezhanin_agency_agents_lib::{
+    CrateRootHermesHealthSnapshot as HermesHealthSnapshot,
+    CrateRootHermesHealthStatus as HermesHealthStatus,
+};
 
 #[test]
 fn regenerate_typescript_bindings() {
@@ -87,4 +96,8 @@ fn regenerate_typescript_bindings() {
     PreflightStatus::export_all().expect("export PreflightStatus");
     // Phase 4b — multi-plugin routing.
     HermesInstalledPlugin::export_all().expect("export HermesInstalledPlugin");
+    // Phase 4c — aggregated health snapshot.
+    HermesHealthSnapshot::export_all().expect("export HermesHealthSnapshot");
+    HermesHealthStatus::export_all().expect("export HermesHealthStatus");
+    ProbeSource::export_all().expect("export ProbeSource");
 }

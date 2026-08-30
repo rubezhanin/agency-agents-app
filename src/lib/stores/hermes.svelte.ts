@@ -18,6 +18,8 @@ import type {
   HermesProbe,
   HermesInstallResult,
   HermesPreflight,
+  HermesHealthSnapshot,
+  HermesHealthStatus,
   HermesInstalledPlugin,
   PreflightCheck,
   PreflightStatus,
@@ -39,6 +41,15 @@ class HermesStore {
   installedPlugins: HermesInstalledPlugin[] = $state([]);
   /** True while the installed-plugins scan is in flight. */
   listingPlugins: boolean = $state(false);
+  /** Aggregated health snapshot (Phase 4c) — probe + preflight +
+   * installed plugins in a single round-trip. The frontend polls
+   * this on a 60s timer to keep the Hermes settings tile fresh. */
+  health: HermesHealthSnapshot | null = $state(null);
+  /** True while a health poll is in flight. */
+  healthLoading: boolean = $state(false);
+  /** Polling handle returned by `startHealthPoll`. `null` when no
+   * poll is running. */
+  healthPollHandle: number | null = $state(null);
   /** Most recent install result, or `null`. Persisted in memory only. */
   lastInstall: HermesInstallResult | null = $state(null);
   /** True while a status probe is in flight. */
@@ -110,6 +121,76 @@ class HermesStore {
       return this.installedPlugins;
     } finally {
       this.listingPlugins = false;
+    }
+  }
+
+  /**
+   * Run the aggregated `hermes_health` IPC. Bundles probe + preflight
+   * + installed-plugins into a single round-trip and a single
+   * timestamp so the UI can render an atomic snapshot. Phase 4c.
+   */
+  async refreshHealth(): Promise<HermesHealthSnapshot | null> {
+    if (this.healthLoading) return this.health;
+    this.healthLoading = true;
+    this.lastError = null;
+    try {
+      const snap = await invoke<HermesHealthSnapshot>("hermes_health");
+      this.health = snap;
+      // Mirror the bundled fields into the per-channel state so
+      // existing UI bits that read `status` / `preflight` /
+      // `installedPlugins` keep working without rewiring.
+      this.status = snap.probe;
+      this.preflight = snap.preflight;
+      this.installedPlugins = snap.plugins;
+      return snap;
+    } catch (e) {
+      this.lastError = String(e);
+      return this.health;
+    } finally {
+      this.healthLoading = false;
+    }
+  }
+
+  /**
+   * Start a `setInterval` poll that re-fetches `hermes_health` every
+   * `intervalMs` (default 60s). Returns the interval handle so the
+   * caller can clear it. Phase 4c.
+   *
+   * Idempotent — calling it again with a new interval replaces the
+   * existing handle.
+   */
+  startHealthPoll(intervalMs = 60_000): number {
+    if (typeof window === "undefined") return 0;
+    this.stopHealthPoll();
+    // Fire one immediate refresh so the UI never shows stale state.
+    void this.refreshHealth();
+    const handle = window.setInterval(() => {
+      void this.refreshHealth();
+    }, intervalMs);
+    this.healthPollHandle = handle;
+    return handle;
+  }
+
+  /** Cancel the health poll started by `startHealthPoll`. No-op when
+   * the poll isn't running. */
+  stopHealthPoll(): void {
+    if (this.healthPollHandle !== null && typeof window !== "undefined") {
+      window.clearInterval(this.healthPollHandle);
+      this.healthPollHandle = null;
+    }
+  }
+
+  /** Human label for an overall health status. Used in the badge
+   * on the Hermes settings tile (Phase 4c). */
+  healthLabel(status: HermesHealthStatus | null | undefined): string {
+    if (!status) return i18n.t("hermes.healthUnknown");
+    switch (status) {
+      case "ok":
+        return i18n.t("hermes.healthOk");
+      case "degraded":
+        return i18n.t("hermes.healthDegraded");
+      case "down":
+        return i18n.t("hermes.healthDown");
     }
   }
 

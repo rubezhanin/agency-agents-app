@@ -730,6 +730,11 @@ const ru = {
   "hermes.canonical": "канонический",
   "hermes.uninstallPlugin": "Удалить плагин {id}",
   "hermes.uninstallPluginHint": "Удалить ~/.hermes/plugins/{id}/?",
+  "hermes.healthOk": "Готово",
+  "hermes.healthDegraded": "Частично",
+  "hermes.healthDown": "Недоступно",
+  "hermes.healthUnknown": "Неизвестно",
+  "hermes.healthCheckedAt": "проверено {when}",
   "hermes.viewPluginHint": "Показать ~/.hermes/plugins/agency-agents-router/ в Проводнике/Finder.",
   // Backups / rollback section (0.4.5)
   "backups.title": "Резервные копии и откат",

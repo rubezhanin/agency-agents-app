@@ -226,6 +226,23 @@ export type DestPatterns = { user: Array<string>, project: Array<string>, };
 export type Detect = { dirs: Array<string>, agentsDir: string | null, };
 
 /**
+ * Aggregate Hermes health snapshot for the Settings → Hermes tile
+ * (Phase 4c). Bundles the CLI probe + pre-flight summary + plugin
+ * list into a single round-trip so the frontend can run a single
+ * `hermes_health` call on a 60-second poll instead of three.
+ *
+ * The `overall` field is the "headline" status the UI shows in the
+ * tile: `ok` when the CLI is on PATH AND meets the minimum AND
+ * home is writable, `degraded` when the CLI is missing or outdated
+ * (a custom plugin install still works without the CLI — the
+ * renderer writes the directory directly), `down` when the home
+ * directory isn't writable (no install path at all).
+ */
+export type HermesHealthSnapshot = { overall: HermesHealthStatus, probe: HermesProbe, preflight: HermesPreflight, plugins: Array<HermesInstalledPlugin>, checkedAt: string, };
+
+export type HermesHealthStatus = "ok" | "degraded" | "down";
+
+/**
  * One row in the `hermes_list_plugins` response. The UI uses
  * `is_canonical` to mark the agency-agents-router plugin distinctly
  * (it cannot be deleted while the catalog is loaded — only refreshed
@@ -272,6 +289,8 @@ checkedAt: string,
  * `install-target`, surfaced for the UI to display in the hint.
  */
 home: string, };
+
+export type HermesProbe = { found: boolean, path: string | null, source: ProbeSource, version: string | null, meetsMinimum: boolean, minimum: string, configPath: string | null, kanbanAvailable: boolean, profiles: Array<string>, stderrTail: string | null, };
 
 /**
  * One row of `installs.json` — the ledger of local install actions.
@@ -355,6 +374,8 @@ blocking: boolean, };
  * Status of a single pre-flight check.
  */
 export type PreflightStatus = "ok" | "warn" | "fail";
+
+export type ProbeSource = "path" | "scan" | "missing";
 
 /**
  * A registered project directory for project-scoped installs. The app

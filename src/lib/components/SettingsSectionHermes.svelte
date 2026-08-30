@@ -23,7 +23,7 @@
    * `hermes`.
    */
 
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import CheckCircle from "@lucide/svelte/icons/check-circle-2";
   import XCircle from "@lucide/svelte/icons/x-circle";
@@ -70,6 +70,14 @@
     void hermes.refreshStatus();
     void hermes.refreshPreflight();
     void hermes.listInstalledPlugins();
+    // Phase 4c — start a 60s poll that re-fetches the aggregated
+    // `hermes_health` snapshot. Cancel on unmount so the timer
+    // doesn't outlive the Settings tile.
+    hermes.startHealthPoll(60_000);
+  });
+
+  onDestroy(() => {
+    hermes.stopHealthPoll();
   });
 
   async function handleInstall() {
@@ -119,6 +127,20 @@
 <div class="section">
   <h2>{i18n.t("hermes.pluginName")}</h2>
   <p class="lead">{i18n.t("hermes.pluginDescription")}</p>
+
+  <!-- Phase 4c — overall health badge + last-checked timestamp.
+       Driven by the 60s `hermes_health` poll started in onMount. -->
+  {#if hermes.health}
+    <div class="health-row">
+      <span class="health-badge" data-status={hermes.health.overall}>
+        <span class="dot" aria-hidden="true"></span>
+        {hermes.healthLabel(hermes.health.overall)}
+      </span>
+      <span class="health-when mono">
+        {i18n.t("hermes.healthCheckedAt", { when: hermes.health.checkedAt })}
+      </span>
+    </div>
+  {/if}
 
   <!-- CLI status tile -->
   <div class="card">
@@ -670,5 +692,51 @@
   .iconbtn.danger:hover:not(:disabled) {
     background: color-mix(in srgb, var(--color-danger) 12%, transparent);
     color: var(--color-danger);
+  }
+
+  /* Phase 4c — overall health badge */
+  .health-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .health-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: var(--text-caption);
+    font-weight: var(--fw-semibold);
+    border: 1px solid var(--color-border);
+  }
+  .health-badge .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  .health-badge[data-status="ok"] {
+    background: color-mix(in srgb, var(--color-success) 12%, transparent);
+    color: var(--color-success);
+    border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+  }
+  .health-badge[data-status="ok"] .dot { background: var(--color-success); }
+  .health-badge[data-status="degraded"] {
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    color: var(--color-warning);
+    border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
+  }
+  .health-badge[data-status="degraded"] .dot { background: var(--color-warning); }
+  .health-badge[data-status="down"] {
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    color: var(--color-danger);
+    border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
+  }
+  .health-badge[data-status="down"] .dot { background: var(--color-danger); }
+  .health-when {
+    font-size: var(--text-caption);
+    color: var(--color-text-muted);
   }
 </style>

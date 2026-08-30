@@ -299,6 +299,258 @@ fn read_manifest_summary(manifest_path: &std::path::Path) -> (String, Option<usi
     (label, skills_count)
 }
 
+/// Aggregate Hermes health snapshot for the Settings → Hermes tile
+/// (Phase 4c). Bundles the CLI probe + pre-flight summary + plugin
+/// list into a single round-trip so the frontend can run a single
+/// `hermes_health` call on a 60-second poll instead of three.
+///
+/// The `overall` field is the "headline" status the UI shows in the
+/// tile: `ok` when the CLI is on PATH AND meets the minimum AND
+/// home is writable, `degraded` when the CLI is missing or outdated
+/// (a custom plugin install still works without the CLI — the
+/// renderer writes the directory directly), `down` when the home
+/// directory isn't writable (no install path at all).
+#[derive(Debug, Clone, Serialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct HermesHealthSnapshot {
+    pub overall: HermesHealthStatus,
+    pub probe: crate::hermes::HermesProbe,
+    pub preflight: crate::hermes::HermesPreflight,
+    pub plugins: Vec<HermesInstalledPlugin>,
+    pub checked_at: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum HermesHealthStatus {
+    /// Everything looks good — CLI present + meets minimum + home writable.
+    Ok,
+    /// Some non-blocking issues — CLI missing or outdated, kanban missing,
+    /// node runtime missing, or a pre-flight check failed but the install
+    /// can still proceed.
+    Degraded,
+    /// Hard blocker — home directory not writable, install target
+    /// conflicts, or the pre-flight reported a blocking failure.
+    Down,
+}
+
+/// Run all Hermes diagnostics in one shot. Equivalent to calling
+/// `hermes_status` + `hermes_preflight` + `hermes_list_plugins` but
+/// cheaper (single spawn for the probe's PATH lookup, shared
+/// `dirs::home_dir` call) and atomic (the snapshot reflects a single
+/// moment in time, not three separate ticks).
+#[tauri::command]
+pub async fn hermes_health(
+    _state: tauri::State<'_, AppState>,
+) -> Result<HermesHealthSnapshot, AppError> {
+    // 1. CLI probe (no profile-list to keep the cost down).
+    let probe = crate::hermes::probe_hermes(crate::hermes::ProbeOptions {
+        skip_profile_list: true,
+        ..Default::default()
+    })
+    .await;
+    // 2. Pre-flight checklist.
+    let preflight = crate::hermes::preflight_hermes().await;
+    // 3. Installed plugins. `hermes_list_plugins` is a separate IPC
+    //    we just defined; call its body inline to avoid a re-entrant
+    //    `#[tauri::command]` call (which Tauri does not support).
+    let home = home_dir()?;
+    let plugins_root = home.join(".hermes").join("plugins");
+    let plugins: Vec<HermesInstalledPlugin> = if !plugins_root.is_dir() {
+        Vec::new()
+    } else {
+        let mut out: Vec<HermesInstalledPlugin> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&plugins_root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let plugin_id = match entry.file_name().to_str() {
+                    Some(s) => s.to_string(),
+                    None => continue,
+                };
+                if plugin_id.starts_with('.') {
+                    continue;
+                }
+                let manifest = path.join("manifest.yaml");
+                let (label, declared_count) = if manifest.is_file() {
+                    read_manifest_summary(&manifest)
+                } else {
+                    (plugin_id.clone(), None)
+                };
+                let skills = path.join("skills");
+                let agent_count = if let Some(n) = declared_count {
+                    n
+                } else if skills.is_dir() {
+                    std::fs::read_dir(&skills)
+                        .map(|d| {
+                            d.flatten()
+                                .filter(|e| {
+                                    e.path()
+                                        .extension()
+                                        .and_then(|x| x.to_str())
+                                        .map(|x| x.eq_ignore_ascii_case("md"))
+                                        .unwrap_or(false)
+                                })
+                                .count()
+                        })
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
+                out.push(HermesInstalledPlugin {
+                    is_canonical: plugin_id == hr::PLUGIN_ID,
+                    plugin_id,
+                    label,
+                    path,
+                    agent_count,
+                });
+            }
+        }
+        out.sort_by(|a, b| {
+            b.is_canonical
+                .cmp(&a.is_canonical)
+                .then_with(|| a.plugin_id.cmp(&b.plugin_id))
+        });
+        out
+    };
+
+    let overall = compute_overall(&probe, &preflight);
+    Ok(HermesHealthSnapshot {
+        overall,
+        probe,
+        preflight,
+        plugins,
+        checked_at: chrono::DateTime::<chrono::Utc>::from(std::time::SystemTime::now())
+            .to_rfc3339(),
+    })
+}
+
+/// Map a (probe, preflight) tuple to a single overall status. Pulled
+/// out so `hermes_health` stays a thin orchestrator and the rule
+/// table is unit-testable in isolation.
+fn compute_overall(
+    probe: &crate::hermes::HermesProbe,
+    preflight: &crate::hermes::HermesPreflight,
+) -> HermesHealthStatus {
+    // Hard blockers first.
+    if preflight
+        .checks
+        .iter()
+        .any(|c| c.status == crate::hermes::PreflightStatus::Fail && c.blocking)
+    {
+        return HermesHealthStatus::Down;
+    }
+    // Degraded signals: CLI missing / outdated, or non-blocking warns.
+    if !probe.found {
+        return HermesHealthStatus::Degraded;
+    }
+    if !probe.meets_minimum {
+        return HermesHealthStatus::Degraded;
+    }
+    if preflight
+        .checks
+        .iter()
+        .any(|c| c.status != crate::hermes::PreflightStatus::Ok)
+    {
+        return HermesHealthStatus::Degraded;
+    }
+    HermesHealthStatus::Ok
+}
+
+#[cfg(test)]
+mod health_tests {
+    use super::*;
+    use crate::hermes::probe::ProbeSource;
+    use crate::hermes::{HermesPreflight, PreflightCheck, PreflightStatus};
+
+    fn empty_preflight() -> HermesPreflight {
+        HermesPreflight {
+            ready: true,
+            checks: Vec::new(),
+            checked_at: "2026-01-01T00:00:00Z".into(),
+            home: PathBuf::from("/tmp"),
+        }
+    }
+
+    fn check(id: &str, status: PreflightStatus, blocking: bool) -> PreflightCheck {
+        PreflightCheck {
+            id: id.into(),
+            label: id.into(),
+            status,
+            detail: String::new(),
+            remediation: None,
+            blocking,
+        }
+    }
+
+    fn found_probe() -> crate::hermes::HermesProbe {
+        crate::hermes::HermesProbe {
+            found: true,
+            path: Some(PathBuf::from("/usr/local/bin/hermes")),
+            source: ProbeSource::Path,
+            version: Some("0.12.3".into()),
+            meets_minimum: true,
+            minimum: "0.12.0".into(),
+            config_path: None,
+            kanban_available: false,
+            profiles: Vec::new(),
+            stderr_tail: None,
+        }
+    }
+
+    #[test]
+    fn compute_overall_ok_when_everything_passes() {
+        let mut pf = empty_preflight();
+        pf.checks.push(check("home", PreflightStatus::Ok, true));
+        assert_eq!(compute_overall(&found_probe(), &pf), HermesHealthStatus::Ok);
+    }
+
+    #[test]
+    fn compute_overall_degraded_when_cli_missing() {
+        let mut probe = found_probe();
+        probe.found = false;
+        probe.meets_minimum = false;
+        assert_eq!(compute_overall(&probe, &empty_preflight()), HermesHealthStatus::Degraded);
+    }
+
+    #[test]
+    fn compute_overall_degraded_when_cli_outdated() {
+        let mut probe = found_probe();
+        probe.meets_minimum = false;
+        assert_eq!(compute_overall(&probe, &empty_preflight()), HermesHealthStatus::Degraded);
+    }
+
+    #[test]
+    fn compute_overall_degraded_on_non_blocking_warn() {
+        let mut pf = empty_preflight();
+        // Non-blocking warn is fine for the install to proceed but
+        // drops the overall from Ok to Degraded so the UI shows a
+        // dot instead of pure green.
+        pf.checks.push(check("node-runtime", PreflightStatus::Warn, false));
+        assert_eq!(compute_overall(&found_probe(), &pf), HermesHealthStatus::Degraded);
+    }
+
+    #[test]
+    fn compute_overall_down_on_blocking_failure() {
+        let mut pf = empty_preflight();
+        pf.checks.push(check("home-writable", PreflightStatus::Fail, true));
+        assert_eq!(compute_overall(&found_probe(), &pf), HermesHealthStatus::Down);
+    }
+
+    #[test]
+    fn compute_overall_ignores_non_blocking_failure() {
+        // A Fail without `blocking` is a soft warning — a custom
+        // plugin install can still work (e.g. kanban missing).
+        let mut pf = empty_preflight();
+        pf.checks.push(check("hermes-kanban", PreflightStatus::Fail, false));
+        assert_eq!(compute_overall(&found_probe(), &pf), HermesHealthStatus::Degraded);
+    }
+}
+
 /// Install a Hermes plugin. The plugin id defaults to
 /// `agency-agents-router` (the canonical, full-catalog plugin) when
 /// the request omits `pluginId`. For the multi-plugin routing path
