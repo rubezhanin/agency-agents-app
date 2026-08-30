@@ -59,6 +59,25 @@ proposed: string,
 differs: boolean, };
 
 /**
+ * Result of `agent_diff` — what's on disk now vs the canonical render the app
+ * would write. Powers "review before Update": the UI can show the user exactly
+ * what an Update/Restore would change before any file is touched.
+ */
+export type AgentDiff = { slug: string, tool: string, projectPath: string | null, dest: string, 
+/**
+ * Current on-disk contents (None if the file is missing).
+ */
+onDisk: string | null, 
+/**
+ * The canonical render the app would write.
+ */
+proposed: string, 
+/**
+ * Whether the two differ (false ⇒ Update is a no-op).
+ */
+differs: boolean, };
+
+/**
  * One entry in the per-app `backups/index.json` ledger — a snapshot of an
  * agent file taken just before a destructive install/update wrote a new
  * render to the same path. The list is what the rollback UI shows and
@@ -69,6 +88,39 @@ differs: boolean, };
  * RFC3339 (matches `InstallRecord::installed_at`).
  */
 export type BackupEntry = { filename: string, dest: string, tool: string, slug: string, createdAt: string, size: bigint, };
+
+/**
+ * One entry in the per-app `backups/index.json` ledger — a snapshot of an
+ * agent file taken just before a destructive install/update wrote a new
+ * render to the same path. The list is what the rollback UI shows and
+ * `backup_restore` resolves back to a `dest`.
+ *
+ * `dest` is the absolute path the backup will be restored to; `filename`
+ * is the on-disk name inside `app_data_dir/backups/`. `created_at` is
+ * RFC3339 (matches `InstallRecord::installed_at`).
+ */
+export type BackupEntry = { filename: string, dest: string, tool: string, slug: string, createdAt: string, size: bigint, };
+
+/**
+ * A catalog directory discovered on disk (for the first-run / Settings picker).
+ */
+export type CatalogCandidate = { 
+/**
+ * Absolute path to the candidate catalog root.
+ */
+path: string, 
+/**
+ * `"managed"` for `~/.agency-agents`, else `"userClone"`.
+ */
+kind: string, 
+/**
+ * Whether it's a git checkout (has `.git`) — drives pull strategy.
+ */
+hasGit: boolean, 
+/**
+ * Quick agent count (top-level `.md` across discovered categories).
+ */
+agentCount: number, };
 
 /**
  * A catalog directory discovered on disk (for the first-run / Settings picker).
@@ -103,6 +155,17 @@ export type CatalogDetection = { gitAvailable: boolean,
 scanned: boolean, candidates: Array<CatalogCandidate>, };
 
 /**
+ * Result of `catalog_detect` — what the app found, plus whether `git` is on
+ * PATH (so the UI can explain clone vs snapshot provisioning).
+ */
+export type CatalogDetection = { gitAvailable: boolean, 
+/**
+ * True when a filesystem scan of common dev roots was performed (the
+ * "Find Agency Agents" button), vs the cheap `~/.agency-agents`-only check.
+ */
+scanned: boolean, candidates: Array<CatalogCandidate>, };
+
+/**
  * Where the active agent catalog lives on disk. The whole app reads/writes the
  * resolved root, so this is the one knob that says "be a respectful frontend
  * over the user's clone" vs "manage our own copy." Persisted to
@@ -110,6 +173,44 @@ scanned: boolean, candidates: Array<CatalogCandidate>, };
  * discriminated union.
  */
 export type CatalogSource = { "kind": "bundled" } | { "kind": "managed", path: string, } | { "kind": "userClone", path: string, manage: boolean, };
+
+/**
+ * Where the active agent catalog lives on disk. The whole app reads/writes the
+ * resolved root, so this is the one knob that says "be a respectful frontend
+ * over the user's clone" vs "manage our own copy." Persisted to
+ * `state/catalog.json`. Serialized tagged on `kind` so the TS side is a clean
+ * discriminated union.
+ */
+export type CatalogSource = { "kind": "bundled" } | { "kind": "managed", path: string, } | { "kind": "userClone", path: string, manage: boolean, };
+
+/**
+ * Live status of the active catalog — source, git provenance, and freshness.
+ * Powers the Settings → Catalog panel ("manage the repo": which commit, how
+ * far behind, what GitHub repo). All git fields are `None`/0 for a non-git
+ * (bundled snapshot) source.
+ */
+export type CatalogStatus = { source: CatalogSource, 
+/**
+ * Catalog root path (None for the bundled, app-data-internal source).
+ */
+root: string | null, isGit: boolean, branch: string | null, 
+/**
+ * Short commit SHA of HEAD.
+ */
+commit: string | null, lastCommitSubject: string | null, lastCommitDate: string | null, 
+/**
+ * Count of uncommitted working-tree changes.
+ */
+dirtyCount: number, 
+/**
+ * `origin` remote URL, if a git checkout.
+ */
+remoteUrl: string | null, 
+/**
+ * `owner/repo` parsed from the remote (for GitHub repo stats), if it's a
+ * github.com remote.
+ */
+repoSlug: string | null, version: string, fetchedAt: string, agentCount: number, };
 
 /**
  * Live status of the active catalog — source, git provenance, and freshness.
@@ -167,6 +268,43 @@ diffstat: string,
 upToDate: boolean, };
 
 /**
+ * Result of checking the active catalog for upstream updates — the "stats on
+ * diffs" view. Git sources fetch + compare against the upstream branch.
+ */
+export type CatalogUpdateCheck = { isGit: boolean, 
+/**
+ * Commits the upstream branch has that we don't (how far behind).
+ */
+behind: number, 
+/**
+ * Commits we have that upstream doesn't (local work).
+ */
+ahead: number, 
+/**
+ * Files that would change on pull.
+ */
+changedFiles: number, 
+/**
+ * Human-readable `git diff --stat` of HEAD..upstream.
+ */
+diffstat: string, 
+/**
+ * True when already at the upstream tip (git) — no-op pull.
+ */
+upToDate: boolean, };
+
+/**
+ * One category for the Discover grid. `slug` is the corpus parent dir
+ * (e.g. `"engineering"`); `icon` is a PascalCase Lucide icon name the
+ * frontend resolves via its static icon map.
+ */
+export type Category = { slug: string, label: string, icon: string, 
+/**
+ * Brand color (hex) for the division, from the catalog metadata.
+ */
+color: string, count: number, };
+
+/**
  * One category for the Discover grid. `slug` is the corpus parent dir
  * (e.g. `"engineering"`); `icon` is a PascalCase Lucide icon name the
  * frontend resolves via its static icon map.
@@ -198,6 +336,31 @@ frontmatterHash: string,
 bodyHash: string, };
 
 /**
+ * One row of `corpus-index.json`. The three split hashes let update
+ * classification distinguish cosmetic (frontmatter-only) from
+ * substantive (body) changes. Hash = SHA-256 lowercase hex of UTF-8
+ * bytes (contracts.md §E).
+ */
+export type CorpusEntry = { slug: string, name: string, category: string, emoji: string | null, color: string | null, vibe: string | null, description: string, 
+/**
+ * SHA-256 of the full canonical `.md`.
+ */
+sourceHash: string, 
+/**
+ * SHA-256 of the frontmatter block.
+ */
+frontmatterHash: string, 
+/**
+ * SHA-256 of the body.
+ */
+bodyHash: string, };
+
+/**
+ * Top-level metadata for the maintained corpus copy.
+ */
+export type CorpusMeta = { version: string, commit: string | null, fetchedAt: string, count: number, };
+
+/**
  * Top-level metadata for the maintained corpus copy.
  */
 export type CorpusMeta = { version: string, commit: string | null, fetchedAt: string, count: number, };
@@ -221,9 +384,88 @@ changes: Array<PlanChange>,
  */
 summary: PlanSummary, };
 
+/**
+ * Aggregate plan for one install. Returned by the
+ * `deploy_plan` IPC; rendered by the UI as a pre-flight
+ * modal.
+ */
+export type DeployPlan = { 
+/**
+ * One row per filesystem effect, in the order the
+ * renderer returned them.
+ */
+changes: Array<PlanChange>, 
+/**
+ * Convenience aggregate: how many files will be created
+ * (don't exist yet), overwritten (exist with different
+ * bytes), skipped (exist with matching bytes), or refused
+ * (sandbox violation). UI badges use these.
+ */
+summary: PlanSummary, };
+
+export type DestPatterns = { user: Array<string>, project: Array<string>, };
+
 export type DestPatterns = { user: Array<string>, project: Array<string>, };
 
 export type Detect = { dirs: Array<string>, agentsDir: string | null, };
+
+export type Detect = { dirs: Array<string>, agentsDir: string | null, };
+
+/**
+ * Result of a `preflight_hermes` call. The UI renders `checks` as a
+ * list and uses `ready` for the banner headline.
+ */
+export type HermesPreflight = { 
+/**
+ * `true` iff no check has status `fail` (warns are fine).
+ */
+ready: boolean, checks: Array<PreflightCheck>, 
+/**
+ * ISO-8601 UTC timestamp of when the pre-flight ran.
+ */
+checkedAt: string, 
+/**
+ * Path the pre-flight probed for `home-writable` and
+ * `install-target`, surfaced for the UI to display in the hint.
+ */
+home: string, };
+
+/**
+ * Result of a `preflight_hermes` call. The UI renders `checks` as a
+ * list and uses `ready` for the banner headline.
+ */
+export type HermesPreflight = { 
+/**
+ * `true` iff no check has status `fail` (warns are fine).
+ */
+ready: boolean, checks: Array<PreflightCheck>, 
+/**
+ * ISO-8601 UTC timestamp of when the pre-flight ran.
+ */
+checkedAt: string, 
+/**
+ * Path the pre-flight probed for `home-writable` and
+ * `install-target`, surfaced for the UI to display in the hint.
+ */
+home: string, };
+
+/**
+ * One row of `installs.json` — the ledger of local install actions.
+ * `source_hash` records the corpus version installed from;
+ * `rendered_hash` is the SHA-256 of the exact bytes written after
+ * per-tool conversion, used by reconciliation to classify state.
+ */
+export type InstallRecord = { slug: string, tool: string, scope: Scope, projectPath: string | null, 
+/**
+ * Absolute path written.
+ */
+dest: string, sourceHash: string, 
+/**
+ * SHA-256 of the agent body at install time. Lets reconciliation label an
+ * available update cosmetic (body unchanged) vs substantive. `#[serde(default)]`
+ * so ledgers written before this field still parse (older rows get "").
+ */
+bodyHash: string, renderedHash: string, installedAt: string, corpusVersion: string, };
 
 /**
  * One row of `installs.json` — the ledger of local install actions.
@@ -251,6 +493,27 @@ bodyHash: string, renderedHash: string, installedAt: string, corpusVersion: stri
 export type InstallState = "current" | "outdated" | "modified" | "removed" | "foreign";
 
 /**
+ * The five reconciliation states (like a package manager's installed /
+ * outdated states). See systemPatterns.md §4 for the disk ↔ ledger ↔ corpus
+ * test that classifies each on-disk agent file.
+ */
+export type InstallState = "current" | "outdated" | "modified" | "removed" | "foreign";
+
+/**
+ * Reconciled view-model for the Library — one on-disk agent file
+ * resolved against the ledger and corpus-index. `update_kind` is
+ * `Some(..)` only when `state == Outdated`.
+ */
+export type InstalledAgent = { slug: string, name: string, tool: string, scope: Scope, projectPath: string | null, dest: string, state: InstallState, updateKind: UpdateKind | null, 
+/**
+ * True when THIS app installed it (it's in the ledger); false when the
+ * Foreign sweep found it on disk (e.g. a prior `install.sh` run). Lets the
+ * UI distinguish "tracked by the app" from "present from other tools"
+ * instead of claiming every recognized file as "installed by you".
+ */
+tracked: boolean, };
+
+/**
  * Reconciled view-model for the Library — one on-disk agent file
  * resolved against the ledger and corpus-index. `update_kind` is
  * `Some(..)` only when `state == Outdated`.
@@ -270,6 +533,18 @@ tracked: boolean, };
 export type LogFile = { name: string, size: bigint, createdAt: string, };
 
 /**
+ * One log file in the per-app `logs/` directory.
+ */
+export type LogFile = { name: string, size: bigint, createdAt: string, };
+
+/**
+ * One filesystem effect the install *would* have. The set
+ * is the union of every `dests()` entry the render layer
+ * returns for this `(slug, tool, project_path)` triple.
+ */
+export type PlanChange = { "kind": "create", dest: string, size: bigint, } | { "kind": "overwrite", dest: string, before_sha: string, after_sha: string, backup_filename: string, } | { "kind": "noChange", dest: string, sha: string, } | { "kind": "refused", dest: string, reason: string, };
+
+/**
  * One filesystem effect the install *would* have. The set
  * is the union of every `dests()` entry the render layer
  * returns for this `(slug, tool, project_path)` triple.
@@ -277,6 +552,68 @@ export type LogFile = { name: string, size: bigint, createdAt: string, };
 export type PlanChange = { "kind": "create", dest: string, size: bigint, } | { "kind": "overwrite", dest: string, before_sha: string, after_sha: string, backup_filename: string, } | { "kind": "noChange", dest: string, sha: string, } | { "kind": "refused", dest: string, reason: string, };
 
 export type PlanSummary = { creates: number, overwrites: number, noChanges: number, refused: number, };
+
+export type PlanSummary = { creates: number, overwrites: number, noChanges: number, refused: number, };
+
+/**
+ * One row in the pre-flight checklist.
+ */
+export type PreflightCheck = { 
+/**
+ * Stable id, e.g. `"hermes-cli"`. Used as an i18n key and in tests.
+ */
+id: string, 
+/**
+ * Human-readable label, e.g. "Hermes CLI".
+ */
+label: string, status: PreflightStatus, 
+/**
+ * Concrete value (path, version, etc.). Empty string when not applicable.
+ */
+detail: string, 
+/**
+ * Optional fix-it suggestion, e.g. "Upgrade with `brew upgrade hermes`."
+ */
+remediation: string | null, 
+/**
+ * When `true`, a `fail` here means the install cannot succeed.
+ */
+blocking: boolean, };
+
+/**
+ * One row in the pre-flight checklist.
+ */
+export type PreflightCheck = { 
+/**
+ * Stable id, e.g. `"hermes-cli"`. Used as an i18n key and in tests.
+ */
+id: string, 
+/**
+ * Human-readable label, e.g. "Hermes CLI".
+ */
+label: string, status: PreflightStatus, 
+/**
+ * Concrete value (path, version, etc.). Empty string when not applicable.
+ */
+detail: string, 
+/**
+ * Optional fix-it suggestion, e.g. "Upgrade with `brew upgrade hermes`."
+ */
+remediation: string | null, 
+/**
+ * When `true`, a `fail` here means the install cannot succeed.
+ */
+blocking: boolean, };
+
+/**
+ * Status of a single pre-flight check.
+ */
+export type PreflightStatus = "ok" | "warn" | "fail";
+
+/**
+ * Status of a single pre-flight check.
+ */
+export type PreflightStatus = "ok" | "warn" | "fail";
 
 /**
  * A registered project directory for project-scoped installs. The app
@@ -297,6 +634,32 @@ label: string,
  * project-scoped tools.
  */
 installedCount: number, };
+
+/**
+ * A registered project directory for project-scoped installs. The app
+ * keeps a Projects list so Library/Tools can show per-project
+ * deployment; one agent in five projects = five tracked rows.
+ */
+export type ProjectInfo = { 
+/**
+ * Absolute project root path.
+ */
+path: string, 
+/**
+ * Display label (defaults to the directory name).
+ */
+label: string, 
+/**
+ * Count of agents installed into this project across all
+ * project-scoped tools.
+ */
+installedCount: number, };
+
+/**
+ * What the caller should do (and tell the user) about each
+ * recovered operation.
+ */
+export type RecoveryAction = { "kind": "needsReview", operation_id: string, operation_type: string, targets: Array<string>, };
 
 /**
  * What the caller should do (and tell the user) about each
@@ -330,12 +693,127 @@ foundCount: number,
 warnings: Array<string>, };
 
 /**
+ * Result of a single recovery pass. Serialised into the
+ * `journal_recovery` Tauri event so the UI can render a
+ * startup banner with the affected dests.
+ */
+export type RecoveryReport = { actions: Array<RecoveryAction>, 
+/**
+ * How many journal rows were flipped to `failed` by this
+ * pass. Useful for the startup banner / Activity log entry.
+ */
+recoveredCount: number, 
+/**
+ * How many `pending` / `committing` rows we *found* on disk.
+ * Equal to `recovered_count` in normal operation; can
+ * differ only if the append-failed edge case happens (we
+ * log it as a warning and skip).
+ */
+foundCount: number, 
+/**
+ * Diagnostics worth surfacing in the structured log: a
+ * corrupt journal row we skipped, or a journal file we
+ * couldn't read at all.
+ */
+warnings: Array<string>, };
+
+/**
+ * Deployment scope. User-global tools write to fixed `~/…` dests;
+ * project-scoped tools install into a tracked `project_path`.
+ */
+export type Scope = "user" | "project";
+
+/**
  * Deployment scope. User-global tools write to fixed `~/…` dests;
  * project-scoped tools install into a tracked `project_path`.
  */
 export type Scope = "user" | "project";
 
 export type ScopeCaps = { user: boolean, project: boolean, };
+
+export type ScopeCaps = { user: boolean, project: boolean, };
+
+/**
+ * One tool entry from the catalog. The schema is **strict** —
+ * every required field must be present, otherwise loading
+ * fails with a typed error. This is a deliberate change from
+ * the loose `registry::ToolSpec`, where most fields were
+ * optional.
+ */
+export type ToolEntry = { 
+/**
+ * camelCase wire value (e.g. `claudeCode`). Must be unique
+ * across the manifest.
+ */
+id: string, 
+/**
+ * Human label shown in the UI (e.g. "Claude Code").
+ */
+label: string, 
+/**
+ * Short label for the sidebar / dense layouts.
+ */
+short: string, 
+/**
+ * Stable on-disk key (e.g. `claude-code`). Must be
+ * unique; this is the dict key in `tools.json`.
+ */
+kebab: string, 
+/**
+ * Brand colour (hex). Optional — older entries may omit.
+ */
+accent: string | null, 
+/**
+ * Icon name (resolved by the frontend icon map).
+ */
+icon: string | null, 
+/**
+ * Sort order in the Tools panel.
+ */
+order: number, 
+/**
+ * Where the tool can deploy.
+ */
+scope: ScopeCaps, 
+/**
+ * Detection hints.
+ */
+detect: Detect, 
+/**
+ * Probe command for the local version.
+ */
+version: VersionProbe | null, 
+/**
+ * Renderer contract. The same `format` name guarantees
+ * byte-identical output across tools.
+ */
+format: string, 
+/**
+ * How the slug is derived for this tool. `name` = use
+ * the agent's `name` frontmatter, `source` = use the
+ * file basename, `null` (omitted) = no per-agent slug
+ * (roster / plugin). Stored as a raw string and validated
+ * post-parse so the bundled `tools.json` (which uses
+ * kebab values like `per-agent`) doesn't have to be
+ * rewritten for this spike. Phase 3 (plugin architecture)
+ * will decide which form is canonical.
+ */
+slugFrom: string | null, 
+/**
+ * Optional prefix on the slug (e.g. `agency-` for
+ * `osaurus` so the dir is `~/.osaurus/skills/agency-foo/`).
+ */
+slugPrefix: string | null, 
+/**
+ * Destination patterns, one per supported scope.
+ */
+dest: DestPatterns, 
+/**
+ * Install mechanism. Stored as a raw string and validated
+ * post-parse; see `KNOWN_INSTALL_KINDS` and the
+ * `validator()` pass.
+ */
+installKind: string, };
 
 /**
  * One tool entry from the catalog. The schema is **strict** —
@@ -431,6 +909,38 @@ export type ToolInfo = { tool: string, label: string, detected: boolean, scope: 
 customPath: string | null, };
 
 /**
+ * View-model for the Tools section — a detected AI tool plus its
+ * deployment surface.
+ */
+export type ToolInfo = { tool: string, label: string, detected: boolean, scope: Scope, userDest: string | null, installedCount: number, 
+/**
+ * Per-tool custom install base path the user configured (else `None` =
+ * OS home). Detection + `user_dest` already reflect this base.
+ */
+customPath: string | null, };
+
+/**
+ * Validated tool manifest. Loaded once at startup (or on
+ * Settings → Catalog → "Refresh manifest" click) and re-used.
+ * Mutation is rare enough that we don't bother with a
+ * `Mutex` / `RwLock` — readers either see the old or the new.
+ */
+export type ToolManifest = { 
+/**
+ * Map of `kebab` → entry. We key on `kebab` (not `id`)
+ * because `kebab` is the on-disk / catalog-stable key
+ * (e.g. `claude-code`); `id` is the camelCase wire value
+ * (`claudeCode`) the frontend uses.
+ */
+tools: { [key in string]?: ToolEntry }, 
+/**
+ * Loader-level warnings: non-fatal but worth surfacing
+ * (e.g. an unknown `format` that the app can't render).
+ * Populated by the validator, not the deserialiser.
+ */
+warnings: Array<string>, };
+
+/**
  * Validated tool manifest. Loaded once at startup (or on
  * Settings → Catalog → "Refresh manifest" click) and re-used.
  * Mutation is rare enough that we don't bother with a
@@ -459,9 +969,24 @@ warnings: Array<string>, };
 export type ToolVersion = { tool: string, version: string | null, };
 
 /**
+ * Best-effort detected version string for a tool, from probing `<bin>
+ * --version`. `version` is `None` when the binary isn't on PATH, the probe
+ * timed out, or the tool has no known version command.
+ */
+export type ToolVersion = { tool: string, version: string | null, };
+
+/**
  * Whether an available update is cosmetic (frontmatter/metadata only,
  * `body_hash` unchanged) or substantive (prompt body changed).
  */
 export type UpdateKind = "cosmetic" | "substantive";
+
+/**
+ * Whether an available update is cosmetic (frontmatter/metadata only,
+ * `body_hash` unchanged) or substantive (prompt body changed).
+ */
+export type UpdateKind = "cosmetic" | "substantive";
+
+export type VersionProbe = { bin: string, args: Array<string>, };
 
 export type VersionProbe = { bin: string, args: Array<string>, };

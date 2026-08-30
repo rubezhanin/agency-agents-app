@@ -27,6 +27,7 @@
   import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import CheckCircle from "@lucide/svelte/icons/check-circle-2";
   import XCircle from "@lucide/svelte/icons/x-circle";
+  import AlertCircle from "@lucide/svelte/icons/circle-alert";
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import FolderOpen from "@lucide/svelte/icons/folder-open";
   import Trash2 from "@lucide/svelte/icons/trash-2";
@@ -64,6 +65,7 @@
 
   onMount(() => {
     void hermes.refreshStatus();
+    void hermes.refreshPreflight();
   });
 
   async function handleInstall() {
@@ -159,6 +161,75 @@
       {#if hermes.status.configPath}
         <p class="hint mono">{hermes.status.configPath}</p>
       {/if}
+    {/if}
+  </div>
+
+  <!-- Readiness checklist (Phase 4a) -->
+  <div class="card">
+    <div class="card-head">
+      <h3>{i18n.t("hermes.preflightTitle")}</h3>
+      <button
+        type="button"
+        class="iconbtn"
+        title={i18n.t("hermes.refreshStatus")}
+        disabled={hermes.preflighting}
+        onclick={() => hermes.refreshPreflight()}
+      >
+        <RefreshCw size={14} class={hermes.preflighting ? "spin" : ""} />
+      </button>
+    </div>
+
+    {#if !hermes.preflight}
+      <div class="status-row missing">
+        <AlertCircle size={16} />
+        <span>{i18n.t("hermes.preflightEmpty")}</span>
+      </div>
+    {:else}
+      <div
+        class="status-row"
+        class:ok={hermes.preflight.ready}
+        class:warn={!hermes.preflight.ready}
+      >
+        {#if hermes.preflight.ready}
+          <CheckCircle size={16} />
+          <span>{i18n.t("hermes.preflightReady")}</span>
+        {:else}
+          <AlertTriangle size={16} />
+          <span>{i18n.t("hermes.preflightNotReady", { count: hermes.preflightIssueCount() })}</span>
+        {/if}
+      </div>
+
+      <ul class="checks">
+        {#each hermes.preflight.checks as check (check.id)}
+          <li class="check" data-status={check.status}>
+            <span class="check-icon" aria-hidden="true">
+              {#if check.status === "ok"}
+                <CheckCircle size={14} />
+              {:else if check.status === "warn"}
+                <AlertTriangle size={14} />
+              {:else}
+                <XCircle size={14} />
+              {/if}
+            </span>
+            <div class="check-body">
+              <div class="check-head">
+                <span class="check-label">{check.label}</span>
+                <span class="check-status" data-status={check.status}>
+                  {hermes.statusLabel(check.status)}
+                </span>
+              </div>
+              {#if check.detail}
+                <p class="check-detail mono">{check.detail}</p>
+              {/if}
+              {#if check.remediation}
+                <p class="check-fix">{check.remediation}</p>
+              {/if}
+            </div>
+          </li>
+        {/each}
+      </ul>
+
+      <p class="hint mono">checked: {hermes.preflight.checkedAt}</p>
     {/if}
   </div>
 
@@ -373,4 +444,74 @@
   .iconbtn:disabled { cursor: default; opacity: 0.5; }
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* Readiness checklist (Phase 4a) */
+  .checks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-2);
+  }
+  .check {
+    display: grid;
+    grid-template-columns: 20px 1fr;
+    gap: var(--space-2);
+    align-items: start;
+    padding: 4px 0;
+  }
+  .check-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 1px;
+  }
+  .check[data-status="ok"]   .check-icon { color: var(--color-success); }
+  .check[data-status="warn"] .check-icon { color: var(--color-warning); }
+  .check[data-status="fail"] .check-icon { color: var(--color-danger); }
+  .check-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .check-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .check-label {
+    font-size: var(--text-body-sm);
+    color: var(--color-text-primary);
+    font-weight: var(--fw-medium);
+  }
+  .check-status {
+    font-size: var(--text-caption);
+    font-weight: var(--fw-semibold);
+    padding: 1px 8px;
+    border-radius: 999px;
+  }
+  .check-status[data-status="ok"] {
+    background: color-mix(in srgb, var(--color-success) 18%, transparent);
+    color: var(--color-success);
+  }
+  .check-status[data-status="warn"] {
+    background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+    color: var(--color-warning);
+  }
+  .check-status[data-status="fail"] {
+    background: color-mix(in srgb, var(--color-danger) 18%, transparent);
+    color: var(--color-danger);
+  }
+  .check-detail {
+    font-size: var(--text-caption);
+    color: var(--color-text-secondary);
+    margin: 0;
+    word-break: break-all;
+  }
+  .check-fix {
+    font-size: var(--text-caption);
+    color: var(--color-text-muted);
+    margin: 0;
+    line-height: var(--lh-normal);
+  }
 </style>

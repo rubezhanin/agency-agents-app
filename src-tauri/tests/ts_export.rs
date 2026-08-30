@@ -42,6 +42,12 @@ use rubezhanin_agency_agents_lib::{
     CrateRootPlanChange as PlanChange,
     CrateRootPlanSummary as PlanSummary,
 };
+// Hermes pre-flight types (Phase 4a).
+use rubezhanin_agency_agents_lib::{
+    CrateRootHermesPreflight as HermesPreflight,
+    CrateRootPreflightCheck as PreflightCheck,
+    CrateRootPreflightStatus as PreflightStatus,
+};
 
 #[test]
 fn regenerate_typescript_bindings() {
@@ -73,4 +79,8 @@ fn regenerate_typescript_bindings() {
     DeployPlan::export_all().expect("export DeployPlan");
     PlanChange::export_all().expect("export PlanChange");
     PlanSummary::export_all().expect("export PlanSummary");
+    // Phase 4a — Hermes pre-flight checklist.
+    HermesPreflight::export_all().expect("export HermesPreflight");
+    PreflightCheck::export_all().expect("export PreflightCheck");
+    PreflightStatus::export_all().expect("export PreflightStatus");
 }

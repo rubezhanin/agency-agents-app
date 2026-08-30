@@ -17,6 +17,9 @@ import { toast } from "$lib/stores/toast.svelte";
 import type {
   HermesProbe,
   HermesInstallResult,
+  HermesPreflight,
+  PreflightCheck,
+  PreflightStatus,
   RenderableAgent,
 } from "$lib/types";
 
@@ -26,6 +29,10 @@ const INSTALL_PATH_HINT = "~/.hermes/plugins/agency-agents-router/";
 class HermesStore {
   /** Last `hermes_status` result, or `null` if never probed / probe failed. */
   status: HermesProbe | null = $state(null);
+  /** Last `hermes_preflight` result, or `null` if never run / failed. */
+  preflight: HermesPreflight | null = $state(null);
+  /** True while a preflight check is in flight. */
+  preflighting: boolean = $state(false);
   /** Most recent install result, or `null`. Persisted in memory only. */
   lastInstall: HermesInstallResult | null = $state(null);
   /** True while a status probe is in flight. */
@@ -53,6 +60,63 @@ class HermesStore {
       return null;
     } finally {
       this.probing = false;
+    }
+  }
+
+  /**
+   * Run the Hermes pre-flight readiness check (CLI, kanban, Node runtime,
+   * home writable, install target). Caches the structured checklist in
+   * `this.preflight` so the UI can render a colour-coded status block.
+   */
+  async refreshPreflight(): Promise<HermesPreflight | null> {
+    if (this.preflighting) return this.preflight;
+    this.preflighting = true;
+    this.lastError = null;
+    try {
+      const pf = await invoke<HermesPreflight>("hermes_preflight");
+      this.preflight = pf;
+      return pf;
+    } catch (e) {
+      this.lastError = String(e);
+      this.preflight = null;
+      return null;
+    } finally {
+      this.preflighting = false;
+    }
+  }
+
+  /**
+   * Pick the first failing check (status === "fail"). Used by the UI to
+   * highlight the most urgent remediation in a banner.
+   */
+  firstFailure(): PreflightCheck | null {
+    if (!this.preflight) return null;
+    return (
+      this.preflight.checks.find((c) => c.status === "fail") ?? null
+    );
+  }
+
+  /**
+   * Count of checks whose status is not "ok". The UI uses this for the
+   * "{n} issues found" line in the banner.
+   */
+  preflightIssueCount(): number {
+    if (!this.preflight) return 0;
+    return this.preflight.checks.filter((c) => c.status !== "ok").length;
+  }
+
+  /**
+   * Map a `PreflightStatus` to an i18n key suffix so the UI can pick a
+   * human label without sprinkling ternaries across the template.
+   */
+  statusLabel(status: PreflightStatus): string {
+    switch (status) {
+      case "ok":
+        return i18n.t("hermes.preflightOk");
+      case "warn":
+        return i18n.t("hermes.preflightWarn");
+      case "fail":
+        return i18n.t("hermes.preflightFail");
     }
   }
 

@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
-use crate::hermes::{probe_hermes, HermesProbe, ProbeOptions};
+use crate::hermes::{preflight_hermes, probe_hermes, HermesPreflight, HermesProbe, ProbeOptions};
 use crate::render::hermes as hr;
 use crate::state::AppState;
 use crate::types::Agent;
@@ -106,6 +106,16 @@ pub struct HermesStageRequest {
 #[tauri::command]
 pub async fn hermes_status(_state: tauri::State<'_, AppState>) -> Result<HermesProbe, AppError> {
     Ok(probe_hermes(ProbeOptions::default()).await)
+}
+
+/// Run the Hermes pre-flight readiness check and return a structured
+/// checklist (CLI, kanban, Node runtime, home writable, install target).
+/// Informational only — the install buttons are not gated on the result.
+#[tauri::command]
+pub async fn hermes_preflight(
+    _state: tauri::State<'_, AppState>,
+) -> Result<HermesPreflight, AppError> {
+    Ok(preflight_hermes().await)
 }
 
 /// Install the `agency-agents-router` plugin into the canonical user

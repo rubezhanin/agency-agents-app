@@ -42,6 +42,11 @@ pub use crate::commands::plan::{
     DeployPlan as CrateRootDeployPlan, PlanChange as CrateRootPlanChange,
     PlanSummary as CrateRootPlanSummary,
 };
+// Re-export the Hermes pre-flight types for the same reason.
+pub use crate::hermes::{
+    HermesPreflight as CrateRootHermesPreflight, PreflightCheck as CrateRootPreflightCheck,
+    PreflightStatus as CrateRootPreflightStatus,
+};
 
 use commands::*;
 
@@ -287,6 +292,11 @@ pub fn run() {
             commands::hermes::hermes_install,
             commands::hermes::hermes_uninstall,
             commands::hermes::hermes_stage,
+            // Phase 4a — readiness check (CLI / kanban / Node / home /
+            // install target). Pure read; doesn't block the install
+            // buttons but surfaces a colour-coded checklist in the
+            // Settings → Hermes tile.
+            commands::hermes::hermes_preflight,
             // Phase 1 — corpus subsystem (contracts.md §C). These live in
             // the `corpus` module rather than `commands::*`; register them
             // fully-qualified alongside the other commands.
