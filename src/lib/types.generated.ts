@@ -202,6 +202,25 @@ bodyHash: string, };
  */
 export type CorpusMeta = { version: string, commit: string | null, fetchedAt: string, count: number, };
 
+/**
+ * Aggregate plan for one install. Returned by the
+ * `deploy_plan` IPC; rendered by the UI as a pre-flight
+ * modal.
+ */
+export type DeployPlan = { 
+/**
+ * One row per filesystem effect, in the order the
+ * renderer returned them.
+ */
+changes: Array<PlanChange>, 
+/**
+ * Convenience aggregate: how many files will be created
+ * (don't exist yet), overwritten (exist with different
+ * bytes), skipped (exist with matching bytes), or refused
+ * (sandbox violation). UI badges use these.
+ */
+summary: PlanSummary, };
+
 export type DestPatterns = { user: Array<string>, project: Array<string>, };
 
 export type Detect = { dirs: Array<string>, agentsDir: string | null, };
@@ -249,6 +268,15 @@ tracked: boolean, };
  * One log file in the per-app `logs/` directory.
  */
 export type LogFile = { name: string, size: bigint, createdAt: string, };
+
+/**
+ * One filesystem effect the install *would* have. The set
+ * is the union of every `dests()` entry the render layer
+ * returns for this `(slug, tool, project_path)` triple.
+ */
+export type PlanChange = { "kind": "create", dest: string, size: bigint, } | { "kind": "overwrite", dest: string, before_sha: string, after_sha: string, backup_filename: string, } | { "kind": "noChange", dest: string, sha: string, } | { "kind": "refused", dest: string, reason: string, };
+
+export type PlanSummary = { creates: number, overwrites: number, noChanges: number, refused: number, };
 
 /**
  * A registered project directory for project-scoped installs. The app

@@ -92,7 +92,7 @@ fn home() -> Result<PathBuf, AppError> {
 /// OS home. Project-scope installs ignore this — they resolve against the
 /// chosen project root. Because the ledger stores the resolved `dest`, reconcile
 /// stays correct with no per-tool logic of its own.
-async fn tool_home(state: &AppState, tool: &str) -> Result<PathBuf, AppError> {
+pub(super) async fn tool_home(state: &AppState, tool: &str) -> Result<PathBuf, AppError> {
     let os_home = home()?;
     let base = state
         .settings
@@ -119,7 +119,7 @@ fn resolve_tool_base(
         .unwrap_or_else(|| os_home.to_path_buf())
 }
 
-fn now_iso() -> String {
+pub(super) fn now_iso() -> String {
     Utc::now().to_rfc3339()
 }
 
@@ -127,13 +127,13 @@ fn now_iso() -> String {
 /// under app data, NOT inside any tool's agent dir — so the Foreign sweep never
 /// mistakes a backup for an installed agent. Every destructive write copies the
 /// prior bytes here first, making install/update/restore reversible.
-fn backups_dir(app: &AppHandle) -> Result<PathBuf, AppError> {
+pub(super) fn backups_dir(app: &AppHandle) -> Result<PathBuf, AppError> {
     let adir = corpus::app_data_dir(app)?;
     Ok(adir.join("backups"))
 }
 
 /// Filesystem-safe variant of an RFC3339 timestamp (no colons).
-fn fs_stamp(iso: &str) -> String {
+pub(super) fn fs_stamp(iso: &str) -> String {
     iso.replace([':', '/'], "-")
 }
 

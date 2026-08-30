@@ -37,6 +37,11 @@ pub use crate::install::recovery::{
 // fold `manifest` and `registry` into one surface and these
 // crate-root aliases will go away.
 pub use crate::manifest::{ToolEntry as CrateRootToolEntry, ToolManifest as CrateRootToolManifest};
+// Re-export the plan / dry-run types for the same reason.
+pub use crate::commands::plan::{
+    DeployPlan as CrateRootDeployPlan, PlanChange as CrateRootPlanChange,
+    PlanSummary as CrateRootPlanSummary,
+};
 
 use commands::*;
 
@@ -319,6 +324,10 @@ pub fn run() {
             install::backup_list,
             install::backup_restore,
             install::backup_folder_path,
+            // Phase 3 — Plan / Dry Run: pure-function preview
+            // of an install's filesystem effects. Surface in
+            // the UI as a pre-flight modal.
+            commands::plan::deploy_plan,
             // Phase 0.4.7 — structured logs (app_data/logs/app.YYYY-MM-DD.json).
             commands::logs_list,
             commands::logs_read,

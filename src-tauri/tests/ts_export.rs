@@ -35,6 +35,13 @@ use rubezhanin_agency_agents_lib::{
     CrateRootRecoveryAction as RecoveryAction,
     CrateRootRecoveryReport as RecoveryReport,
 };
+// Plan / Dry Run types (Phase 3) — same crate-root alias
+// pattern.
+use rubezhanin_agency_agents_lib::{
+    CrateRootDeployPlan as DeployPlan,
+    CrateRootPlanChange as PlanChange,
+    CrateRootPlanSummary as PlanSummary,
+};
 
 #[test]
 fn regenerate_typescript_bindings() {
@@ -62,4 +69,8 @@ fn regenerate_typescript_bindings() {
     ToolManifest::export_all().expect("export ToolManifest");
     ToolVersion::export_all().expect("export ToolVersion");
     UpdateKind::export_all().expect("export UpdateKind");
+    // Phase 3 — Plan / Dry Run types.
+    DeployPlan::export_all().expect("export DeployPlan");
+    PlanChange::export_all().expect("export PlanChange");
+    PlanSummary::export_all().expect("export PlanSummary");
 }
