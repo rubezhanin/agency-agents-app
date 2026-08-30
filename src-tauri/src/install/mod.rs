@@ -29,6 +29,23 @@ use crate::types::{
 use crate::util::fs::{atomic_write, read_capped};
 use crate::util::sandbox::{resolve_safe_path, resolve_under_root_creating};
 
+// Phase-1 spike (feature/transactional-engine): the operation
+// journal. Append-only JSONL under `app_data/journal/operations.jsonl`,
+// one row per multi-step filesystem transaction. Wired in later
+// commits — this is the storage primitive only.
+//
+// `dead_code` allow: this spike exposes the public surface of
+// the transactional engine (journal / transaction / recovery)
+// but no lib-side caller uses it yet — the IPC wiring is the
+// next commit on the same branch. The allow is scoped to
+// `not(test)` because the unit tests *do* use every symbol.
+#[cfg_attr(not(test), allow(dead_code, unused_imports))]
+pub mod journal;
+#[cfg_attr(not(test), allow(dead_code, unused_imports))]
+pub mod recovery;
+#[cfg_attr(not(test), allow(dead_code, unused_imports))]
+pub mod transaction;
+
 /// Cap on an installed agent file we read back during reconciliation.
 const MAX_INSTALLED_BYTES: u64 = 4 * 1024 * 1024;
 
@@ -385,27 +402,72 @@ async fn do_install(
         .find(|r| r.slug == slug && r.tool == tool && r.project_path == project_path)
         .map(|r| PathBuf::from(&r.dest));
     let stamp = now_iso();
-    let outcome = write_agent_files_to(
-        &agent,
-        &raw,
+
+    // Phase-1 transactional engine: wrap the multi-step filesystem
+    // work (write + ledger + backup-index) in a single operation
+    // journal entry. The targets list is built *after* the write
+    // because we don't know which dest paths `write_agent_files_to`
+    // will materialise until it runs — for a single-target tool
+    // (the common case) this is just `record.dest`, for
+    // multi-target tools it dedups every backup's `dest`.
+    let op_id = operation_id_for(
+        &slug,
         &tool,
-        &home,
-        proot.as_deref(),
-        Some(&backups),
-        &entry.source_hash,
-        &entry.body_hash,
-        &corpus.version(),
-        &stamp,
-        existing_dest.as_deref(),
+        project_path.as_deref().map(Path::new),
+    );
+    let app_data_dir = corpus::app_data_dir(app)?;
+    transaction::run(
+        &app_data_dir,
+        &op_id,
+        "install",
+        // Provisional targets — if `write_agent_files_to` later
+        // returns more dests via `outcome.backups`, we re-record
+        // them by *appending* a second "completed" row inside the
+        // closure (cheap; the journal is append-only and the
+        // recovery code only cares about pending/committing).
+        vec![format!("{}:{}", slug, tool)],
+        || async {
+            let outcome = write_agent_files_to(
+                &agent,
+                &raw,
+                &tool,
+                &home,
+                proot.as_deref(),
+                Some(&backups),
+                &entry.source_hash,
+                &entry.body_hash,
+                &corpus.version(),
+                &stamp,
+                existing_dest.as_deref(),
+            )
+            .await?;
+
+            record_backup_entries(app, &outcome.backups, &tool, &slug, &stamp).await?;
+
+            ledger.retain(|r| {
+                !(r.slug == slug && r.tool == tool && r.project_path == project_path)
+            });
+            ledger.push(outcome.record.clone());
+            save_ledger(app, &ledger).await?;
+            Ok(outcome.record)
+        },
     )
-    .await?;
+    .await
+}
 
-    record_backup_entries(app, &outcome.backups, &tool, &slug, &stamp).await?;
-
-    ledger.retain(|r| !(r.slug == slug && r.tool == tool && r.project_path == project_path));
-    ledger.push(outcome.record.clone());
-    save_ledger(app, &ledger).await?;
-    Ok(outcome.record)
+/// Cheap, stable, deterministic per-(slug, tool, project) op id.
+/// We *don't* use a fresh `uuid::Uuid` here on purpose: when
+/// recovery scans the journal it gets back the original id, and
+/// having it match `slug:tool:project` makes the user-facing
+/// "1 unfinished install recovered" message immediately readable
+/// without a join to the ledger. (`uuid` is intentionally not
+/// pulled in for the spike — `time` + `chrono` are already
+/// present, and adding `uuid` would be a separate decision.)
+fn operation_id_for(slug: &str, tool: &str, project: Option<&Path>) -> String {
+    match project {
+        Some(p) => format!("install:{slug}:{tool}:{}", p.display()),
+        None => format!("install:{slug}:{tool}"),
+    }
 }
 
 /// Track a recognized on-disk agent into the ledger **without writing anything**

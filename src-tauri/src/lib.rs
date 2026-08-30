@@ -171,6 +171,54 @@ pub fn run() {
             // when both `update_auto_check` is on AND `paranoid_mode`
             // is off. Backoff on failure: 1h → 6h → 24h.
             commands::updater::spawn_auto_check_scheduler(app.handle().clone());
+
+            // 0.4.7-dev — startup recovery for the operation journal.
+            // If a previous run died mid-install (Ctrl-C, OOM,
+            // BSOD), the journal will have `pending` / `committing`
+            // rows that never reached a terminal state. Sweep
+            // them, mark them as `failed`, and surface a one-line
+            // warning per affected op. The user-facing banner
+            // (showing the affected dests) is delivered via the
+            // `journal_recovery` event in a follow-up commit; for
+            // now we just log.
+            if let Ok(adir) = app.path().app_data_dir() {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use crate::install::recovery;
+                    use tauri::Emitter;
+                    match recovery::recover_unfinished(&adir).await {
+                        Ok(report) if report.recovered_count > 0 => {
+                            tracing::warn!(
+                                recovered_count = report.recovered_count,
+                                found_count = report.found_count,
+                                actions = report.actions.len(),
+                                "startup: recovered unfinished operations from the previous run; \
+                                 affected dests need a manual reconcile or backup_restore"
+                            );
+                            // Emit a Tauri event so the frontend
+                            // (when wired) can show a banner. We
+                            // ship the event now so the IPC plumbing
+                            // is in place even before the UI listens
+                            // to it; an event with no listeners is
+                            // a no-op, not an error.
+                            let _ = app_handle.emit(
+                                "journal_recovery",
+                                report,
+                            );
+                        }
+                        Ok(_) => {
+                            // No recovery needed; journal is clean.
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                error = %e,
+                                "startup: journal recovery failed; ignoring (recovery is \
+                                 best-effort — a corrupt journal should not block app startup)"
+                            );
+                        }
+                    }
+                });
+            }
             #[cfg(target_os = "macos")]
             {
                 // Apply NSVisualEffectView to the main window so it picks up the
