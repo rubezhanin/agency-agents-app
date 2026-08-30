@@ -44,6 +44,7 @@
 use std::path::{PathBuf};
 
 use serde::Serialize;
+use ts_rs::TS;
 
 use crate::error::AppError;
 
@@ -53,8 +54,9 @@ use super::journal::{
 
 /// What the caller should do (and tell the user) about each
 /// recovered operation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case", tag = "kind")]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub enum RecoveryAction {
     /// An install/update/restore was interrupted mid-flight.
     /// The on-disk state may be partial; the matching backup
@@ -70,7 +72,9 @@ pub enum RecoveryAction {
 /// Result of a single recovery pass. Serialised into the
 /// `journal_recovery` Tauri event so the UI can render a
 /// startup banner with the affected dests.
-#[derive(Debug, Default, Clone, Serialize)]
+#[derive(Debug, Default, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 pub struct RecoveryReport {
     pub actions: Vec<RecoveryAction>,
     /// How many journal rows were flipped to `failed` by this

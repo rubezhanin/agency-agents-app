@@ -267,6 +267,37 @@ label: string,
 installedCount: number, };
 
 /**
+ * What the caller should do (and tell the user) about each
+ * recovered operation.
+ */
+export type RecoveryAction = { "kind": "needsReview", operation_id: string, operation_type: string, targets: Array<string>, };
+
+/**
+ * Result of a single recovery pass. Serialised into the
+ * `journal_recovery` Tauri event so the UI can render a
+ * startup banner with the affected dests.
+ */
+export type RecoveryReport = { actions: Array<RecoveryAction>, 
+/**
+ * How many journal rows were flipped to `failed` by this
+ * pass. Useful for the startup banner / Activity log entry.
+ */
+recoveredCount: number, 
+/**
+ * How many `pending` / `committing` rows we *found* on disk.
+ * Equal to `recovered_count` in normal operation; can
+ * differ only if the append-failed edge case happens (we
+ * log it as a warning and skip).
+ */
+foundCount: number, 
+/**
+ * Diagnostics worth surfacing in the structured log: a
+ * corrupt journal row we skipped, or a journal file we
+ * couldn't read at all.
+ */
+warnings: Array<string>, };
+
+/**
  * Deployment scope. User-global tools write to fixed `~/…` dests;
  * project-scoped tools install into a tracked `project_path`.
  */

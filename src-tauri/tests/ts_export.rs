@@ -20,6 +20,14 @@ use rubezhanin_agency_agents_lib::types::{
     CorpusMeta, InstallRecord, InstallState, InstalledAgent, LogFile,
     ProjectInfo, Scope, ToolInfo, ToolVersion, UpdateKind,
 };
+// Recovery types live behind the private `install` module. The
+// `lib.rs`-root `pub use` re-exports them under the alias names
+// `CrateRoot*`; we import those here, then `export_all` on them
+// drives the ts-rs codegen for the real types in `recovery.rs`.
+use rubezhanin_agency_agents_lib::{
+    CrateRootRecoveryAction as RecoveryAction,
+    CrateRootRecoveryReport as RecoveryReport,
+};
 
 #[test]
 fn regenerate_typescript_bindings() {
@@ -39,6 +47,8 @@ fn regenerate_typescript_bindings() {
     InstalledAgent::export_all().expect("export InstalledAgent");
     LogFile::export_all().expect("export LogFile");
     ProjectInfo::export_all().expect("export ProjectInfo");
+    RecoveryAction::export_all().expect("export RecoveryAction");
+    RecoveryReport::export_all().expect("export RecoveryReport");
     Scope::export_all().expect("export Scope");
     ToolInfo::export_all().expect("export ToolInfo");
     ToolVersion::export_all().expect("export ToolVersion");

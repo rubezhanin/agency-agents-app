@@ -757,6 +757,10 @@ const en = {
   "logs.openingFolder": "Open logs folder",
   "logs.openedFolderOk": "Opened logs folder",
   "logs.openFolderFailed": "Could not open logs folder: {error}",
+  // Recovery (transactional engine startup sweep)
+  "recovery.bannerTitle": "Recovered {count} unfinished install operation(s)",
+  "recovery.bannerBody": "A previous run exited mid-install. Open Settings → Backups to see the affected files and roll them back if needed.",
+  "recovery.bannerAction": "Open Backups",
 } as const;
 
 export type MessageKey = keyof typeof en;

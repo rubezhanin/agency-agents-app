@@ -744,6 +744,10 @@ const ru = {
   "logs.openingFolder": "Открыть папку логов",
   "logs.openedFolderOk": "Папка логов открыта",
   "logs.openFolderFailed": "Не удалось открыть папку логов: {error}",
+  // Recovery (transactional engine startup sweep)
+  "recovery.bannerTitle": "Восстановлено незавершённых операций: {count}",
+  "recovery.bannerBody": "Предыдущий запуск вышел в середине установки. Откройте Настройки → Резервные копии, чтобы увидеть затронутые файлы и при необходимости откатить их.",
+  "recovery.bannerAction": "Открыть копии",
 } satisfies Partial<Messages>;
 
 export default ru;

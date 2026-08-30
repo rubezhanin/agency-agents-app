@@ -24,6 +24,14 @@ mod state;
 pub mod types;
 mod util;
 
+// Re-export the transactional-engine recovery types at the
+// crate root so the ts-rs integration test in `tests/ts_export.rs`
+// can drive their codegen without going through the private
+// `install` module.
+pub use crate::install::recovery::{
+    RecoveryAction as CrateRootRecoveryAction, RecoveryReport as CrateRootRecoveryReport,
+};
+
 use commands::*;
 
 // =============================================================

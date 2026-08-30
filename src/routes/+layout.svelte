@@ -7,6 +7,7 @@
   import { activity } from "$lib/stores/activity.svelte";
   import { settings } from "$lib/stores/settings.svelte";
   import { catalog } from "$lib/stores/catalog.svelte";
+  import { recovery } from "$lib/stores/recovery.svelte";
   import { i18n } from "$lib/stores/i18n.svelte";
   import CatalogFirstRun from "$lib/components/CatalogFirstRun.svelte";
 
@@ -28,6 +29,12 @@
     // section has been resolved above), so the first entry is real.
     ui.initNav();
     activity.hydrate();
+    // Subscribe to the `journal_recovery` event from the Rust
+    // startup sweep (`install::recovery::recover_unfinished` in
+    // `lib.rs::setup`). The event is one-shot at startup; the
+    // store caches the report and surfaces a toast on first
+    // arrival. See `stores/recovery.svelte.ts`.
+    void recovery.start();
     // Install state — reconcile ONCE here at the app root, not inside the view
     // components. A view that both reads install.* state AND triggers a mutation
     // (reconcile) during its own setup froze its reactivity (Library bug). Views
