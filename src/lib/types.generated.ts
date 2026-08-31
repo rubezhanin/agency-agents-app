@@ -96,6 +96,12 @@ targetId: string | null,
  */
 detail: string | null, };
 
+/**
+ * Result of `audit_export`. The UI shows the destination path and
+ * the row count in a success toast.
+ */
+export type AuditExportSummary = { path: string, count: number, };
+
 export type AuditOutcome = "ok" | "warn" | "fail";
 
 /**

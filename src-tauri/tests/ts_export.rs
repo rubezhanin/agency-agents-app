@@ -63,6 +63,7 @@ use rubezhanin_agency_agents_lib::{
 use rubezhanin_agency_agents_lib::{
     CrateRootAuditEntry as AuditEntry,
     CrateRootAuditOutcome as AuditOutcome,
+    CrateRootAuditExportSummary as AuditExportSummary,
 };
 
 #[test]
@@ -108,4 +109,6 @@ fn regenerate_typescript_bindings() {
     // Phase 5 — audit log.
     AuditEntry::export_all().expect("export AuditEntry");
     AuditOutcome::export_all().expect("export AuditOutcome");
+    // Phase 6 — audit export summary.
+    AuditExportSummary::export_all().expect("export AuditExportSummary");
 }

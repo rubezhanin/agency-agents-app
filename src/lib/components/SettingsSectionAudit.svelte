@@ -15,6 +15,8 @@
   import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
   import XCircle from "@lucide/svelte/icons/x-circle";
   import Info from "@lucide/svelte/icons/info";
+  import Download from "@lucide/svelte/icons/download";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
 
   import { audit } from "$lib/stores/audit.svelte";
   import { i18n } from "$lib/stores/i18n.svelte";
@@ -22,6 +24,14 @@
   onMount(() => {
     void audit.refresh();
   });
+
+  /** Phase 6 — team-mode clear needs an extra confirm. The native
+   * `confirm()` matches the rest of the destructive flows
+   * (Hermes uninstall, foreign-row delete). */
+  async function handleClear() {
+    if (!window.confirm(i18n.t("audit.clearConfirm"))) return;
+    await audit.clear();
+  }
 </script>
 
 <div class="section">
@@ -31,15 +41,35 @@
   <div class="card">
     <div class="card-head">
       <h3>{i18n.t("audit.title")}</h3>
-      <button
-        type="button"
-        class="iconbtn"
-        title={i18n.t("audit.refresh")}
-        disabled={audit.loading}
-        onclick={() => void audit.refresh()}
-      >
-        <RefreshCw size={14} class={audit.loading ? "spin" : ""} />
-      </button>
+      <div class="head-actions">
+        <button
+          type="button"
+          class="iconbtn"
+          title={i18n.t("audit.export")}
+          disabled={audit.exporting}
+          onclick={() => void audit.exportTo()}
+        >
+          <Download size={14} class={audit.exporting ? "spin" : ""} />
+        </button>
+        <button
+          type="button"
+          class="iconbtn danger"
+          title={i18n.t("audit.clear")}
+          disabled={audit.clearing}
+          onclick={handleClear}
+        >
+          <Trash2 size={14} class={audit.clearing ? "spin" : ""} />
+        </button>
+        <button
+          type="button"
+          class="iconbtn"
+          title={i18n.t("audit.refresh")}
+          disabled={audit.loading}
+          onclick={() => void audit.refresh()}
+        >
+          <RefreshCw size={14} class={audit.loading ? "spin" : ""} />
+        </button>
+      </div>
     </div>
 
     {#if audit.entries.length === 0}
@@ -222,6 +252,12 @@
     color: var(--color-text-primary);
   }
   .iconbtn:disabled { cursor: default; opacity: 0.5; }
+  .iconbtn.danger { color: var(--color-danger); }
+  .iconbtn.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    color: var(--color-danger);
+  }
+  .head-actions { display: inline-flex; gap: 2px; }
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .mono { font-family: var(--font-mono); font-size: var(--text-mono); }

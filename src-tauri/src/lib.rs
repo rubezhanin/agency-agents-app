@@ -54,6 +54,8 @@ pub use crate::hermes::probe::{HermesProbe as CrateRootHermesProbe, ProbeSource 
 // Re-export the audit log DTOs (Phase 5 — Trustworthy Core: runbook
 // apply + audit trail).
 pub use crate::audit::{AuditEntry as CrateRootAuditEntry, AuditOutcome as CrateRootAuditOutcome};
+// Re-export the audit export summary (Phase 6 — team-mode export).
+pub use crate::commands::audit::AuditExportSummary as CrateRootAuditExportSummary;
 // Re-export the Hermes installed-plugin DTO (Phase 4b — multi-plugin
 // routing). Lives in `commands::hermes` so the ts-rs integration test
 // reaches it via the same crate-root alias pattern.
@@ -372,6 +374,11 @@ pub fn run() {
             // crash-safe trail of significant operations.
             commands::audit_log,
             commands::audit_recent,
+            // Phase 6 — team-mode export / clear. The user picks a
+            // file via the Tauri save dialog; the backend writes a
+            // pretty-printed JSON array of every entry.
+            commands::audit_export,
+            commands::audit_clear,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -11,13 +11,18 @@
  * tail of the log; `record()` triggers an optimistic append + a
  * background refresh so the UI sees the new row without a round
  * trip's delay.
+ *
+ * Phase 6 — Trustworthy Core team mode — adds `exportTo(path)`
+ * and `clear()` for sharing the log with a team lead and
+ * truncating it after an incident review.
  */
 
 import { invoke } from "@tauri-apps/api/core";
+import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 
 import { i18n } from "$lib/stores/i18n.svelte";
 import { toast } from "$lib/stores/toast.svelte";
-import type { AuditEntry, AuditOutcome } from "$lib/types";
+import type { AuditEntry, AuditExportSummary, AuditOutcome } from "$lib/types";
 
 class AuditStore {
   /** Most recent N entries, newest first. `null` until first refresh. */
@@ -119,6 +124,68 @@ class AuditStore {
     if (this.lastError) {
       toast.error(this.lastError);
       this.lastError = null;
+    }
+  }
+
+  // ── Phase 6 — team-mode export / clear ──────────────────────────
+
+  /** True while `exportTo` is in flight. */
+  exporting: boolean = $state(false);
+  /** True while `clear` is in flight. */
+  clearing: boolean = $state(false);
+
+  /**
+   * Export the full audit log to a user-picked JSON file. Opens a
+   * Tauri save dialog, then asks the backend to write a
+   * pretty-printed JSON array (newest first). Returns the summary
+   * on success, or `null` when the user cancelled the dialog.
+   */
+  async exportTo(): Promise<AuditExportSummary | null> {
+    if (this.exporting) return null;
+    const path = await saveDialog({
+      title: i18n.t("audit.exportDialogTitle"),
+      defaultPath: "agency-agents-audit.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (!path) return null;
+    this.exporting = true;
+    this.lastError = null;
+    try {
+      const summary = await invoke<AuditExportSummary>("audit_export", {
+        dest: path,
+      });
+      toast.success(
+        i18n.t("audit.exportSuccess", { count: summary.count, path: summary.path }),
+      );
+      return summary;
+    } catch (e) {
+      this.lastError = String(e);
+      toast.error(i18n.t("audit.exportFailed", { message: String(e) }));
+      return null;
+    } finally {
+      this.exporting = false;
+    }
+  }
+
+  /**
+   * Truncate the on-disk audit log. The UI must confirm before
+   * calling this — the action is irreversible.
+   */
+  async clear(): Promise<number> {
+    if (this.clearing) return 0;
+    this.clearing = true;
+    this.lastError = null;
+    try {
+      const removed = await invoke<number>("audit_clear");
+      this.entries = [];
+      toast.success(i18n.t("audit.clearSuccess", { count: removed }));
+      return removed;
+    } catch (e) {
+      this.lastError = String(e);
+      toast.error(i18n.t("audit.clearFailed", { message: String(e) }));
+      return 0;
+    } finally {
+      this.clearing = false;
     }
   }
 }
