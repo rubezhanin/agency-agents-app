@@ -1,9 +1,19 @@
 # Hermes Plugin — `agency-agents-router`
 
-> **Status:** Draft v0.4.0. Working contract between Agency Agents and the [`hermes`](https://hermes-agent.dev) CLI.
+> **Status:** v1.2.0. Working contract between Agency Agents and the [`hermes`](https://hermes-agent.dev) CLI.
 > Source of truth: this document + `src-tauri/src/render/hermes.rs` + `src-tauri/data/tools.json` → `hermes` entry.
 > The plugin's `manifest.yaml` is **a strict superset of the upstream `agent-kit.manifest.schema.json`** ([rubezhanin/agent-kit `schema/agent-kit.manifest.schema.json`](https://github.com/rubezhanin/agent-kit/blob/main/schema/agent-kit.manifest.schema.json)) — every field of the upstream schema is preserved, and the plugin adds Hermes-plugin-specific fields under `plugin_meta`.
 > Open questions are flagged with **[TBD]**.
+
+Since v1.1.0 the plugin family supports **multi-plugin routing** — the
+canonical `agency-agents-router` plus any number of custom plugins
+named by the user (one per division, one per persona-set, etc.). The
+renderer signature is now `render_named_plugin(agents, sources,
+catalog_ref, app_version, plugin_id, plugin_label)`; the install
+directory is `~/.hermes/plugins/<plugin_id>/`. The pre-flight check
+(`hermes_preflight`) and the aggregated health snapshot
+(`hermes_health`) document the runtime readiness of the install path;
+see [§9 Pre-flight](#9-pre-flight) and [§10 Health snapshot](#10-health-snapshot).
 
 ## 1. What this is
 
@@ -206,17 +216,84 @@ The app surfaces a "Stage for `hermes plugin install`…" button in the Hermes i
 - **Index sync** — every `agents` entry in `manifest.yaml` has a matching `skills/<slug>.md`; the `skills/` directory has **no** files outside that list.
 - **Reconciliation** — modified/removed/foreign states classify correctly against a fs-fixture.
 
-## 9. Open questions
+## 9. Pre-flight
+
+The app runs a pre-flight check before the user clicks "Install as
+Hermes plugin" (and on every Settings → Hermes tile mount, via the
+`hermes_preflight` IPC). The check is **informational only** — the
+install buttons stay live even when a check fails, with a soft
+warning rendered as the destructive-callout in the modal.
+
+Five independent checks land in a single `HermesPreflight` response:
+
+| id                  | what it tests                                                            | blocking |
+|---------------------|--------------------------------------------------------------------------|----------|
+| `hermes-cli`        | `hermes` binary on PATH or in a common install location; version ≥ `0.12.0` | no       |
+| `hermes-kanban`     | `hermes kanban --help` succeeds (sub-feature presence)                  | no       |
+| `node-runtime`      | `node` (or `bun`) on PATH, version string parses                         | no       |
+| `home-writable`     | can create a temp file under `$HOME`                                     | yes      |
+| `install-target`    | `~/.hermes/plugins/<plugin_id>/` is missing, or a writable directory     | yes      |
+
+The `HermesPreflight { ready, checks, checkedAt, home }` is rendered
+in the UI as a colour-coded checklist (green / yellow / red pill per
+row, "X issues found" headline, expandable detail + remediation
+strings). The `ready` summary is true when no row has `fail`; the
+UI uses it for the banner.
+
+## 10. Health snapshot
+
+A separate `hermes_health` IPC bundles the probe, the pre-flight,
+and a scan of `~/.hermes/plugins/` into a single round-trip and a
+single timestamp. The Settings → Hermes tile polls it on a 60s
+`setInterval` (started in `onMount`, cancelled in `onDestroy`).
+
+`HermesHealthSnapshot { overall, probe, preflight, plugins, checkedAt }`
+plus a derived `HermesHealthStatus`:
+
+- **ok** — CLI on PATH, meets minimum, home writable, no warnings.
+- **degraded** — CLI missing or outdated, OR a non-blocking warn
+  fired (kanban missing, node missing, etc.). The user can still
+  install — the renderer doesn't shell out to `hermes`.
+- **down** — a blocking check failed (home not writable, install
+  target conflicts). The install buttons remain enabled so the
+  user can stage to a custom directory, but the badge is red.
+
+The tile shows the overall as a colour-coded pill (green / yellow /
+red) and the `checkedAt` ISO timestamp beside it.
+
+## 11. Multi-plugin routing
+
+Since v1.1.0 the install path is parametric: the user passes a
+kebab-case `pluginId` (matching `[a-z0-9-]{1,64}`) and a human
+`pluginLabel` to `hermes_install` / `hermes_stage`. The renderer
+mirrors both into the plugin's `manifest.yaml` (`id:` and
+`display_name:`) and into the router skill's `name:` / `# Heading`.
+
+Canonical `agency-agents-router` is the default and is what
+`hermes_install` writes when no id is supplied. Custom plugins land
+in `~/.hermes/plugins/<plugin_id>/` and coexist with the canonical
+one; `hermes_list_plugins` reads them back as a per-row
+`{ pluginId, label, path, agentCount, isCanonical }` table for the
+Settings → Hermes "Installed plugins" card.
+
+Use cases: ship the `engineering` division as `engineering-team`,
+the `growth` division as `growth-team`, etc. — Hermes sees them as
+independent plugins with distinct router skills.
+
+## 12. Open questions
 
 - **[TBD]** Hermes plugin kinds — `router` is the proposed value. Confirm with `hermes-kit`.
 - **[TBD]** Should `manifest.yaml` support per-agent hooks (e.g. `triggers`, `model_preference`)? Wait for hermes-kit v0.x to land a stable manifest spec.
 - **[TBD]** Router `ROUTER.md` is not in the directory layout above — drop or keep?
 - **[TBD]** When the user uninstalls via the app, should we run `hermes plugin remove …` (slower, but hermes may be caching)? Decision: direct fs remove; recommend restart of `hermes`.
+- **[TBD]** Should the multi-plugin routing path also write a Hermes journal entry (mirroring the install journal) so a crashed install can be recovered on next launch? The current per-plugin install goes through `install_to` which is already atomic; only the in-flight write is at risk.
 
-## 10. Versioning
+## 13. Versioning
 
-| App version | Plugin manifest version | Notes |
-|-------------|-------------------------|-------|
-| 0.4.0       | 1                       | First Hermes-aware release. |
+| App version | Plugin manifest version | Notes                                                       |
+|-------------|-------------------------|-------------------------------------------------------------|
+| 0.4.0       | 1                       | First Hermes-aware release.                                 |
+| 1.1.0       | 1                       | Multi-plugin routing: `render_named_plugin(...)`.           |
+| 1.2.0       | 1                       | `hermes_preflight` + `hermes_health` (pre-flight + 60s poll).|
 
 The manifest `schema_version` is independent of the app version. App `version` is recorded so users can see which build of the app produced their plugin.
