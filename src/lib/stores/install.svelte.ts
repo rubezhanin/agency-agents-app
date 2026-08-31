@@ -15,7 +15,7 @@ import { activity } from "$lib/stores/activity.svelte";
 import { i18n } from "$lib/stores/i18n.svelte";
 import { corpus } from "$lib/stores/corpus.svelte";
 import { wiredTools } from "$lib/data/toolRegistry";
-import type { AgentDiff, InstalledAgent, InstallRecord, InstallState, Tool, ToolInfo, ToolVersion } from "$lib/types";
+import type { AgentDiff, DeployPlan, InstalledAgent, InstallRecord, InstallState, Tool, ToolInfo, ToolVersion } from "$lib/types";
 
 /** The tools Phase 2 can install to. Mirrors the Rust `SUPPORTED` set and the
     `supports_user()`/`supports_project()` capabilities in `render/mod.rs`.
@@ -467,6 +467,54 @@ class InstallStore {
     await this.reconcile();
     void this.loadTools();
     return recs;
+  }
+
+  // ── Phase 3 follow-up: DeployPlan preview ──────────────────────────
+  // `deploy_plan` is a pure-function IPC: it reads the corpus, renders
+  // every agent into a destination, and reports creates / overwrites
+  // / no-changes / refusals without writing anything. The UI surfaces
+  // the result as a colour-coded preview before the user actually
+  // commits to an install.
+  //
+  // The store keeps two pieces of state — `previewPlan`, `previewBusy`
+  // — so the modal can render a snapshot taken at open time and survive
+  // re-renders while the user reviews it.
+
+  /** Current preview plan (null when no preview is open). */
+  previewPlan: DeployPlan | null = $state(null);
+  /** True while a `deploy_plan` IPC is in flight. */
+  previewBusy: boolean = $state(false);
+  /** Last preview error message (rendered as a callout in the modal). */
+  previewError: string | null = $state(null);
+
+  /**
+   * Open the deploy-plan preview for the given install targets. Pure
+   * read — no writes happen until the user explicitly confirms.
+   */
+  async openPreview(
+    targets: Array<{ slug: string; tool: string; projectPath: string | null }>,
+  ): Promise<void> {
+    this.previewBusy = true;
+    this.previewError = null;
+    try {
+      const plan = await invoke<DeployPlan>("deploy_plan", {
+        targets,
+      });
+      this.previewPlan = plan;
+    } catch (e) {
+      this.previewError = String(e);
+      this.previewPlan = null;
+    } finally {
+      this.previewBusy = false;
+    }
+  }
+
+  /** Close the preview without committing. The plan + summary are
+   * dropped so the modal can re-open fresh next time. */
+  closePreview(): void {
+    this.previewPlan = null;
+    this.previewBusy = false;
+    this.previewError = null;
   }
 }
 

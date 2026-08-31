@@ -30,9 +30,11 @@
   import DiffModal from "./DiffModal.svelte";
   import DivisionsLanding from "./DivisionsLanding.svelte";
   import InstallModal from "./InstallModal.svelte";
+  import DeployPreviewModal from "./DeployPreviewModal.svelte";
   import StarterPrompt from "./StarterPrompt.svelte";
   import { divisionPrompt } from "$lib/data/playbook";
   import DownloadIcon from "@lucide/svelte/icons/download";
+  import EyeIcon from "@lucide/svelte/icons/eye";
 
   import { corpus } from "$lib/stores/corpus.svelte";
   import { install } from "$lib/stores/install.svelte";
@@ -253,6 +255,22 @@
   let confirmDelete = $state(false);
   // Bulk deploy: the shared InstallModal opened over the current selection.
   let bulkInstallOpen = $state(false);
+  // Phase 3 follow-up: deploy-plan preview opened over the current
+  // selection. The user can review creates/overwrites/refused before
+  // committing the install.
+  let previewOpen = $state(false);
+
+  /** Build the (slug, tool, projectPath) targets from the current
+   * bulk selection so the preview can be passed straight to
+   * `install.openPreview`. The tool is "" because the per-agent
+   * renderer picks the format from the manifest, not the IPC arg. */
+  function previewSelection() {
+    const slugs = [...selected];
+    void install.openPreview(
+      slugs.map((slug) => ({ slug, tool: "", projectPath: null })),
+    );
+    previewOpen = true;
+  }
 
   function enterSelect() { selectMode = true; }
   function exitSelect() { selectMode = false; menuOpen = false; selected = new Set(); }
@@ -380,6 +398,9 @@
                 <div class="bulk-menu" role="menu" bind:this={bulkMenu}>
                   <button class="bulk-opt" role="menuitem" onclick={() => { menuOpen = false; bulkInstallOpen = true; }}>
                     <DownloadIcon size={14} /><span>{i18n.t("agents.installSelected")}</span>
+                  </button>
+                  <button class="bulk-opt" role="menuitem" onclick={() => { menuOpen = false; previewSelection(); }}>
+                    <EyeIcon size={14} /><span>{i18n.t("agents.previewInstall")}</span>
                   </button>
                   <div class="bulk-div"></div>
                   <button class="bulk-opt" role="menuitem" disabled={!canBulkUpdate} title={canBulkUpdate ? "" : i18n.t("agents.allSelectedInSync")} onclick={() => runBulk("update", "agents.updatedVerb")}>
@@ -525,6 +546,21 @@
     title={i18n.t("agents.installSelectedTitle", { count: selected.size })}
     agentSlugs={[...selected]}
     onClose={() => (bulkInstallOpen = false)}
+  />
+{/if}
+
+{#if previewOpen}
+  <DeployPreviewModal
+    open={previewOpen}
+    title={i18n.t("agents.previewInstall") + ` · ${selected.size}`}
+    onClose={() => { previewOpen = false; install.closePreview(); }}
+    onProceed={() => {
+      // Hand off to the bulk install flow — it already knows how to
+      // dispatch install_agent for each (slug, tool, project) triple.
+      previewOpen = false;
+      install.closePreview();
+      bulkInstallOpen = true;
+    }}
   />
 {/if}
 
