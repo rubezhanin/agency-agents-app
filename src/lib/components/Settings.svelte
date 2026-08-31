@@ -28,6 +28,7 @@
   import Plug from "@lucide/svelte/icons/plug";
   import History from "@lucide/svelte/icons/history";
   import FileText from "@lucide/svelte/icons/file-text";
+  import Shield from "@lucide/svelte/icons/shield-check";
 
   import { ui } from "$lib/stores/ui.svelte";
   import SettingsSectionAppearance from "./SettingsSectionAppearance.svelte";
@@ -39,6 +40,7 @@
   import SettingsSectionLogs from "./SettingsSectionLogs.svelte";
   import SettingsSectionAbout from "./SettingsSectionAbout.svelte";
   import SettingsSectionHermes from "./SettingsSectionHermes.svelte";
+  import SettingsSectionAudit from "./SettingsSectionAudit.svelte";
   import { i18n } from "$lib/stores/i18n.svelte";
   import type { SettingsSection } from "$lib/types";
 
@@ -56,6 +58,7 @@
     { id: "backups",    icon: History },
     { id: "logs",       icon: FileText },
     { id: "hermes",     icon: Plug },
+    { id: "audit",      icon: Shield },
     { id: "about",      icon: Info },
   ];
 
@@ -71,6 +74,7 @@
     if (id === "backups") return i18n.t("settings.backups");
     if (id === "logs") return i18n.t("settings.logs");
     if (id === "hermes") return i18n.t("hermes.pluginName");
+    if (id === "audit") return i18n.t("audit.title");
     return i18n.t("settings.about");
   }
 
@@ -190,6 +194,8 @@
           <SettingsSectionLogs />
         {:else if activeSection === "hermes"}
           <SettingsSectionHermes />
+        {:else if activeSection === "audit"}
+          <SettingsSectionAudit />
         {:else if activeSection === "about"}
           <SettingsSectionAbout />
         {/if}

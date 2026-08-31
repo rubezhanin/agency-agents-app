@@ -12,6 +12,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import { activity } from "$lib/stores/activity.svelte";
+import { audit } from "$lib/stores/audit.svelte";
 import { i18n } from "$lib/stores/i18n.svelte";
 import { corpus } from "$lib/stores/corpus.svelte";
 import { wiredTools } from "$lib/data/toolRegistry";
@@ -243,6 +244,12 @@ class InstallStore {
         scope: this.scopeOf(projectPath),
         projectPath: projectPath ?? undefined,
         outcome: "ok",
+      });
+      // Phase 5 — durable audit trail. Best-effort; the install
+      // already reported its own success toast.
+      void audit.record("install", `Install ${slug}`, {
+        targetId: slug,
+        detail: projectPath ? `tool=${tool} project=${projectPath}` : `tool=${tool}`,
       });
       return rec;
     } catch (e) {

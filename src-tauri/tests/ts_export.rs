@@ -59,6 +59,11 @@ use rubezhanin_agency_agents_lib::{
     CrateRootHermesHealthSnapshot as HermesHealthSnapshot,
     CrateRootHermesHealthStatus as HermesHealthStatus,
 };
+// Audit log (Phase 5).
+use rubezhanin_agency_agents_lib::{
+    CrateRootAuditEntry as AuditEntry,
+    CrateRootAuditOutcome as AuditOutcome,
+};
 
 #[test]
 fn regenerate_typescript_bindings() {
@@ -100,4 +105,7 @@ fn regenerate_typescript_bindings() {
     HermesHealthSnapshot::export_all().expect("export HermesHealthSnapshot");
     HermesHealthStatus::export_all().expect("export HermesHealthStatus");
     ProbeSource::export_all().expect("export ProbeSource");
+    // Phase 5 — audit log.
+    AuditEntry::export_all().expect("export AuditEntry");
+    AuditOutcome::export_all().expect("export AuditOutcome");
 }

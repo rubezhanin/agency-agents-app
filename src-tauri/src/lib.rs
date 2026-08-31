@@ -5,6 +5,7 @@
 //! Tauri Builder + invoke_handler registration; every command lives
 //! in `commands::*`.
 
+mod audit;
 mod commands;
 mod corpus;
 mod error;
@@ -50,6 +51,9 @@ pub use crate::hermes::{
 // Re-export the Hermes probe + probe source for the same reason
 // (Phase 4c — HermesHealthSnapshot embeds both).
 pub use crate::hermes::probe::{HermesProbe as CrateRootHermesProbe, ProbeSource as CrateRootProbeSource};
+// Re-export the audit log DTOs (Phase 5 — Trustworthy Core: runbook
+// apply + audit trail).
+pub use crate::audit::{AuditEntry as CrateRootAuditEntry, AuditOutcome as CrateRootAuditOutcome};
 // Re-export the Hermes installed-plugin DTO (Phase 4b — multi-plugin
 // routing). Lives in `commands::hermes` so the ts-rs integration test
 // reaches it via the same crate-root alias pattern.
@@ -363,6 +367,11 @@ pub fn run() {
             commands::logs_read,
             commands::logs_clear,
             commands::logs_folder_path,
+            // Phase 5 — audit log (app_data/audit/operations.jsonl).
+            // Backs the Settings → Activity tab with a durable,
+            // crash-safe trail of significant operations.
+            commands::audit_log,
+            commands::audit_recent,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

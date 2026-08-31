@@ -59,6 +59,46 @@ proposed: string,
 differs: boolean, };
 
 /**
+ * One row in the audit log. Always serialised to a single line in
+ * `operations.jsonl`; reads reverse the order so the UI gets newest
+ * first without a full file sort.
+ */
+export type AuditEntry = { 
+/**
+ * ISO-8601 UTC timestamp (RFC 3339).
+ */
+timestamp: string, 
+/**
+ * Stable, machine-readable action name. Convention: `<area>.<verb>`,
+ * e.g. `install.commit`, `hermes.install`, `runbook.apply`,
+ * `settings.update`. Free-form for new areas.
+ */
+kind: string, 
+/**
+ * Free-form human label the UI can show in a list. Falls back to
+ * `kind` when missing.
+ */
+label: string | null, 
+/**
+ * `ok` | `warn` | `fail` — outcome of the operation. `ok` covers
+ * both successful mutations and intentional no-ops.
+ */
+outcome: AuditOutcome, 
+/**
+ * Stable id of the affected entity (slug, plugin_id, runbook
+ * slug, etc.). Optional — bulk operations may leave this empty
+ * and put the count in `detail` instead.
+ */
+targetId: string | null, 
+/**
+ * Free-form context string the UI can render as a subtitle
+ * (e.g. "12 agents, 3 tools", "~/.hermes/plugins/engineering-team").
+ */
+detail: string | null, };
+
+export type AuditOutcome = "ok" | "warn" | "fail";
+
+/**
  * One entry in the per-app `backups/index.json` ledger — a snapshot of an
  * agent file taken just before a destructive install/update wrote a new
  * render to the same path. The list is what the rollback UI shows and

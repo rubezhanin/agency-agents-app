@@ -367,6 +367,7 @@ export type SettingsSection =
   | "backups"
   | "logs"
   | "hermes"
+  | "audit"
   | "about";
 
 /** Command-palette item — a verb (action). */

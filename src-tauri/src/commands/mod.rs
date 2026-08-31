@@ -5,6 +5,8 @@
 //! inside this file but are load-bearing for the macro invocation.
 
 #[allow(unused_imports)]
+pub mod audit;
+#[allow(unused_imports)]
 pub mod github;
 #[allow(unused_imports)]
 pub mod hermes;
@@ -17,6 +19,8 @@ pub mod settings;
 #[allow(unused_imports)]
 pub mod updater;
 
+#[allow(unused_imports)]
+pub use audit::*;
 #[allow(unused_imports)]
 pub use github::*;
 #[allow(unused_imports)]
