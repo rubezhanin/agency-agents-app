@@ -5,12 +5,14 @@
 //! Tauri Builder + invoke_handler registration; every command lives
 //! in `commands::*`.
 
+mod audit;
 mod commands;
 mod corpus;
 mod error;
 mod github;
 mod hermes;
 mod install;
+mod manifest;
 mod registry;
 mod render;
 mod state;
@@ -23,6 +25,52 @@ mod state;
 // any user-facing API beyond what's already implicit in a Tauri app.
 pub mod types;
 mod util;
+
+// Re-export the transactional-engine recovery types at the
+// crate root so the ts-rs integration test in `tests/ts_export.rs`
+// can drive their codegen without going through the private
+// `install` module.
+pub use crate::install::recovery::{
+    RecoveryAction as CrateRootRecoveryAction, RecoveryReport as CrateRootRecoveryReport,
+};
+// Re-export the upstream tool manifest types at the crate
+// root for the same reason. Phase 3 (plugin architecture) will
+// fold `manifest` and `registry` into one surface and these
+// crate-root aliases will go away.
+pub use crate::manifest::{ToolEntry as CrateRootToolEntry, ToolManifest as CrateRootToolManifest};
+// Re-export the plan / dry-run types for the same reason.
+pub use crate::commands::plan::{
+    DeployPlan as CrateRootDeployPlan, PlanChange as CrateRootPlanChange,
+    PlanSummary as CrateRootPlanSummary,
+};
+// Re-export the Hermes pre-flight types for the same reason.
+pub use crate::hermes::{
+    HermesPreflight as CrateRootHermesPreflight, PreflightCheck as CrateRootPreflightCheck,
+    PreflightStatus as CrateRootPreflightStatus,
+};
+// Re-export the Hermes probe + probe source for the same reason
+// (Phase 4c — HermesHealthSnapshot embeds both).
+pub use crate::hermes::probe::{HermesProbe as CrateRootHermesProbe, ProbeSource as CrateRootProbeSource};
+// Re-export the audit log DTOs (Phase 5 — Trustworthy Core: runbook
+// apply + audit trail).
+pub use crate::audit::{AuditEntry as CrateRootAuditEntry, AuditOutcome as CrateRootAuditOutcome};
+// Re-export the audit export summary (Phase 6 — team-mode export).
+pub use crate::commands::audit::AuditExportSummary as CrateRootAuditExportSummary;
+// Re-export the runbook apply DTOs (Phase 5 follow-up: a real
+// runbook_apply IPC that resolves a runbook's roster to slugs
+// and reports per-slug outcomes).
+pub use crate::commands::runbook::{
+    RunbookApplyOutcome as CrateRootRunbookApplyOutcome,
+    RunbookApplySummary as CrateRootRunbookApplySummary,
+};
+// Re-export the Hermes installed-plugin DTO (Phase 4b — multi-plugin
+// routing). Lives in `commands::hermes` so the ts-rs integration test
+// reaches it via the same crate-root alias pattern.
+pub use crate::commands::hermes::{
+    HermesHealthSnapshot as CrateRootHermesHealthSnapshot,
+    HermesHealthStatus as CrateRootHermesHealthStatus,
+    HermesInstalledPlugin as CrateRootHermesInstalledPlugin,
+};
 
 use commands::*;
 
@@ -171,6 +219,54 @@ pub fn run() {
             // when both `update_auto_check` is on AND `paranoid_mode`
             // is off. Backoff on failure: 1h → 6h → 24h.
             commands::updater::spawn_auto_check_scheduler(app.handle().clone());
+
+            // 0.4.7-dev — startup recovery for the operation journal.
+            // If a previous run died mid-install (Ctrl-C, OOM,
+            // BSOD), the journal will have `pending` / `committing`
+            // rows that never reached a terminal state. Sweep
+            // them, mark them as `failed`, and surface a one-line
+            // warning per affected op. The user-facing banner
+            // (showing the affected dests) is delivered via the
+            // `journal_recovery` event in a follow-up commit; for
+            // now we just log.
+            if let Ok(adir) = app.path().app_data_dir() {
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use crate::install::recovery;
+                    use tauri::Emitter;
+                    match recovery::recover_unfinished(&adir).await {
+                        Ok(report) if report.recovered_count > 0 => {
+                            tracing::warn!(
+                                recovered_count = report.recovered_count,
+                                found_count = report.found_count,
+                                actions = report.actions.len(),
+                                "startup: recovered unfinished operations from the previous run; \
+                                 affected dests need a manual reconcile or backup_restore"
+                            );
+                            // Emit a Tauri event so the frontend
+                            // (when wired) can show a banner. We
+                            // ship the event now so the IPC plumbing
+                            // is in place even before the UI listens
+                            // to it; an event with no listeners is
+                            // a no-op, not an error.
+                            let _ = app_handle.emit(
+                                "journal_recovery",
+                                report,
+                            );
+                        }
+                        Ok(_) => {
+                            // No recovery needed; journal is clean.
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                error = %e,
+                                "startup: journal recovery failed; ignoring (recovery is \
+                                 best-effort — a corrupt journal should not block app startup)"
+                            );
+                        }
+                    }
+                });
+            }
             #[cfg(target_os = "macos")]
             {
                 // Apply NSVisualEffectView to the main window so it picks up the
@@ -220,6 +316,20 @@ pub fn run() {
             commands::hermes::hermes_install,
             commands::hermes::hermes_uninstall,
             commands::hermes::hermes_stage,
+            // Phase 4a — readiness check (CLI / kanban / Node / home /
+            // install target). Pure read; doesn't block the install
+            // buttons but surfaces a colour-coded checklist in the
+            // Settings → Hermes tile.
+            commands::hermes::hermes_preflight,
+            // Phase 4b — multi-plugin routing: scan
+            // `~/.hermes/plugins/` and return a per-plugin summary
+            // (id, label, path, agent count, canonical flag).
+            commands::hermes::hermes_list_plugins,
+            // Phase 4c — aggregated health snapshot (probe + preflight +
+            // installed plugins in a single round-trip). The frontend
+            // polls this on a 60s timer while the Hermes settings
+            // section is mounted.
+            commands::hermes::hermes_health,
             // Phase 1 — corpus subsystem (contracts.md §C). These live in
             // the `corpus` module rather than `commands::*`; register them
             // fully-qualified alongside the other commands.
@@ -257,11 +367,31 @@ pub fn run() {
             install::backup_list,
             install::backup_restore,
             install::backup_folder_path,
+            // Phase 3 — Plan / Dry Run: pure-function preview
+            // of an install's filesystem effects. Surface in
+            // the UI as a pre-flight modal.
+            commands::plan::deploy_plan,
             // Phase 0.4.7 — structured logs (app_data/logs/app.YYYY-MM-DD.json).
             commands::logs_list,
             commands::logs_read,
             commands::logs_clear,
             commands::logs_folder_path,
+            // Phase 5 — audit log (app_data/audit/operations.jsonl).
+            // Backs the Settings → Activity tab with a durable,
+            // crash-safe trail of significant operations.
+            commands::audit_log,
+            commands::audit_recent,
+            // Phase 6 — team-mode export / clear. The user picks a
+            // file via the Tauri save dialog; the backend writes a
+            // pretty-printed JSON array of every entry.
+            commands::audit_export,
+            commands::audit_clear,
+            // Phase 5 follow-up — one-shot runbook apply. The
+            // backend resolves the runbook to a deduplicated list
+            // of slugs and returns a structured summary. The actual
+            // per-slug installs are driven from the frontend's
+            // `install` store using the same data.
+            commands::runbook_apply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

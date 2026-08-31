@@ -143,6 +143,14 @@
                 <button class="btn ghost" onclick={() => copyPrompt(rb)}>
                   <CopyIcon size={14} /><span>{i18n.t("runbooks.copyPrompt")}</span>
                 </button>
+                <button
+                  class="btn primary"
+                  disabled={c.found === 0 || runbooks.applying}
+                  onclick={() => runbooks.applyRunbook(rb.slug)}
+                  title={i18n.t("runbooks.applyTitle")}
+                >
+                  <DownloadIcon size={14} /><span>{runbooks.applying ? i18n.t("runbooks.applying") : i18n.t("runbooks.apply")}</span>
+                </button>
                 <button class="btn primary" disabled={c.found === 0} onclick={() => (deployRb = rb)}>
                   <DownloadIcon size={14} /><span>{i18n.t("runbooks.deploy")}</span>
                 </button>

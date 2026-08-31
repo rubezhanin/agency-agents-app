@@ -37,20 +37,44 @@ use crate::error::AppError;
 use crate::render::sha256_hex;
 use crate::types::Agent;
 
-/// The plugin id. Stable across versions. Used as both the install directory
-/// name (`~/.hermes/plugins/<PLUGIN_ID>/`) and the `manifest.yaml` `id` field.
+/// Default plugin id. Stable across versions. Used as both the install
+/// directory name (`~/.hermes/plugins/<PLUGIN_ID>/`) and the
+/// `manifest.yaml` `id` field. Custom plugins (multi-plugin routing)
+/// pass their own `plugin_id` to `render_named_plugin` /
+/// `user_install_root_for`.
 pub const PLUGIN_ID: &str = "agency-agents-router";
+
+/// Default plugin label. Mirrored in `manifest.yaml` `display_name` and
+/// in the router skill's `# Heading`.
+pub const PLUGIN_LABEL: &str = "Agency Agents Router";
 
 /// The user-scoped install root for a given home. Mirrors
 /// `tools.json` → `hermes` → `dest.user[0]` (`.hermes/plugins/agency-agents-router`).
+#[allow(dead_code)] // public API kept for symmetry with `user_install_root_for`
 pub fn user_install_root(home: &Path) -> PathBuf {
-    home.join(".hermes").join("plugins").join(PLUGIN_ID)
+    user_install_root_for(home, PLUGIN_ID)
+}
+
+/// The user-scoped install root for a custom plugin id. Used by the
+/// multi-plugin routing path (Phase 4b) where each division can ship
+/// as its own plugin under `~/.hermes/plugins/<id>/`.
+pub fn user_install_root_for(home: &Path, plugin_id: &str) -> PathBuf {
+    home.join(".hermes").join("plugins").join(plugin_id)
 }
 
 /// The on-disk plugin, ready to be written to a destination directory.
 ///
 /// All fields are owned strings; `install_to` writes them to disk.
+#[derive(Debug)]
 pub struct HermesPlugin {
+    /// Stable id used as the install directory basename and the
+    /// `manifest.yaml` `id` field. Default: `PLUGIN_ID`. Custom
+    /// plugins (Phase 4b multi-plugin routing) get their own id.
+    pub plugin_id: String,
+    /// Human-readable label mirrored in `manifest.yaml` `display_name`
+    /// and the router skill's `# Heading`. Default: `PLUGIN_LABEL`.
+    #[allow(dead_code)] // surfaced via `manifest` / `router` bytes; read by the IPC `hermes_list_plugins` scanner.
+    pub plugin_label: String,
     /// `manifest.yaml` content (UTF-8 YAML).
     pub manifest: String,
     /// `SKILL.md` content (the router skill).
@@ -95,7 +119,29 @@ impl HermesPlugin {
     }
 }
 
-/// Render the plugin directory from a list of agents and their raw sources.
+/// Render the plugin for the canonical `agency-agents-router` plugin.
+/// Shortcut for `render_named_plugin(..., PLUGIN_ID, PLUGIN_LABEL)`;
+/// kept for backward compatibility with the existing tests + IPC.
+pub fn render_plugin(
+    agents: &[Agent],
+    sources: &[String],
+    catalog_ref: &str,
+    app_version: &str,
+) -> Result<HermesPlugin, AppError> {
+    render_named_plugin(
+        agents,
+        sources,
+        catalog_ref,
+        app_version,
+        PLUGIN_ID,
+        PLUGIN_LABEL,
+    )
+}
+
+/// Render a plugin for an arbitrary plugin id + label. This is the
+/// multi-plugin routing path (Phase 4b) where a user can ship one
+/// division — say, `engineering` — as its own plugin, distinct from
+/// the canonical `agency-agents-router`.
 ///
 /// * `agents`   — the parsed agent list (one `Agent` per persona).
 /// * `sources`  — the raw `.md` for each agent, in the same order. The body
@@ -106,19 +152,26 @@ impl HermesPlugin {
 ///                    Frozen in the manifest. Reconciliation compares bytes
 ///                    against this ref.
 /// * `app_version` — the app's semver, mirrored in `plugin_meta.version`.
+/// * `plugin_id`   — the plugin's stable id (`[a-z0-9-]+`), used as the
+///                    install directory basename and the `manifest.yaml`
+///                    `id` field.
+/// * `plugin_label` — human-readable label for `display_name` and the
+///                    router skill's `# Heading`.
 ///
-/// Returns a `HermesPlugin` whose bytes are byte-deterministic given identical
-/// inputs.
-pub fn render_plugin(
+/// Returns a `HermesPlugin` whose bytes are byte-deterministic given
+/// identical inputs.
+pub fn render_named_plugin(
     agents: &[Agent],
     sources: &[String],
     catalog_ref: &str,
     app_version: &str,
+    plugin_id: &str,
+    plugin_label: &str,
 ) -> Result<HermesPlugin, AppError> {
     if agents.len() != sources.len() {
         return Err(AppError::InvalidArgument {
             message: format!(
-                "agents ({}) and sources ({}) length mismatch",
+                "render_named_plugin: agents ({}) and sources ({}) length mismatch",
                 agents.len(),
                 sources.len()
             ),
@@ -126,12 +179,24 @@ pub fn render_plugin(
     }
     if agents.is_empty() {
         return Err(AppError::InvalidArgument {
-            message: "render_plugin: at least one agent is required".into(),
+            message: "render_named_plugin: at least one agent is required".into(),
         });
     }
     if catalog_ref.trim().is_empty() {
         return Err(AppError::InvalidArgument {
-            message: "render_plugin: catalog_ref must be a non-empty git ref".into(),
+            message: "render_named_plugin: catalog_ref must be a non-empty git ref".into(),
+        });
+    }
+    if !is_valid_plugin_id(plugin_id) {
+        return Err(AppError::InvalidArgument {
+            message: format!(
+                "render_named_plugin: plugin_id {plugin_id:?} must match [a-z0-9-]+ and be 1-64 chars"
+            ),
+        });
+    }
+    if plugin_label.trim().is_empty() {
+        return Err(AppError::InvalidArgument {
+            message: "render_named_plugin: plugin_label must be non-empty".into(),
         });
     }
 
@@ -148,16 +213,28 @@ pub fn render_plugin(
         .collect();
     skills.sort_by(|a, b| a.0.cmp(&b.0));
 
-    let manifest = render_manifest(agents, catalog_ref, app_version)?;
-    let router = render_router(agents);
+    let manifest = render_manifest(agents, catalog_ref, app_version, plugin_id, plugin_label)?;
+    let router = render_router(agents, plugin_id, plugin_label);
 
     Ok(HermesPlugin {
+        plugin_id: plugin_id.to_string(),
+        plugin_label: plugin_label.to_string(),
         manifest,
         router,
         skills,
         app_version: app_version.to_string(),
         catalog_ref: catalog_ref.to_string(),
     })
+}
+
+/// True when `id` is a safe kebab-case plugin id. Mirrors the
+/// hermes-cli naming rule so the install directory basename can
+/// double as the manifest's `id` field without quoting.
+fn is_valid_plugin_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 /// Write the plugin to a destination directory **atomically**:
@@ -176,7 +253,7 @@ pub fn install_to(plugin: &HermesPlugin, dest_root: &Path) -> Result<InstallRepo
         .ok_or_else(|| AppError::InvalidArgument {
             message: "install_to: dest_root has no parent".into(),
         })?;
-    let staging = parent.join(format!(".{}.tmp-{}", PLUGIN_ID, Uuid::new_v4()));
+    let staging = parent.join(format!(".{}.tmp-{}", plugin.plugin_id, Uuid::new_v4()));
 
     // 1. Stage the entire directory tree.
     if staging.exists() {
@@ -308,17 +385,21 @@ fn source_field<'a>(source: &'a str, field: &str) -> &'a str {
 /// Render the router `SKILL.md`. Lists every included persona with a one-line
 /// description and a relative path. The "regenerated by the app" comment is
 /// a stable, narrow marker that reconciliation can recognise.
-fn render_router(agents: &[Agent]) -> String {
+///
+/// `plugin_id` and `plugin_label` parameterise the frontmatter `name:` and
+/// the `# Heading` so custom plugins (multi-plugin routing, Phase 4b)
+/// render distinct router skills.
+fn render_router(agents: &[Agent], plugin_id: &str, plugin_label: &str) -> String {
     let mut s = String::with_capacity(2048);
     s.push_str("---\n");
-    s.push_str("name: agency-agents-router\n");
+    s.push_str(&format!("name: {plugin_id}\n"));
     s.push_str("description: |\n");
     s.push_str("  Route a user request to the right agent persona from the\n");
     s.push_str("  rubezhanin/agency-agents catalog. Use this skill whenever a\n");
     s.push_str("  user describes a coding, design, ops, or content task and\n");
     s.push_str("  the best-fit persona isn't obvious.\n");
     s.push_str("---\n\n");
-    s.push_str("# Agency Agents Router\n\n");
+    s.push_str(&format!("# {plugin_label}\n\n"));
     s.push_str("You are the **router** for the [Agency Agents](https://github.com/rubezhanin/agency-agents)\n");
     s.push_str("catalog inside Hermes. Your job is to read the user's request, pick the right persona from\n");
     s.push_str("the skills in this plugin, and answer as that persona.\n\n");
@@ -346,13 +427,15 @@ fn render_manifest(
     agents: &[Agent],
     catalog_ref: &str,
     app_version: &str,
+    plugin_id: &str,
+    plugin_label: &str,
 ) -> Result<String, AppError> {
     let mut s = String::with_capacity(2048);
 
     // Top-level agent-kit fields.
     s.push_str("schema_version: 1\n");
-    s.push_str(&format!("id: {PLUGIN_ID}\n"));
-    s.push_str("display_name: Agency Agents Router\n");
+    s.push_str(&format!("id: {plugin_id}\n"));
+    s.push_str(&format!("display_name: {plugin_label}\n"));
     s.push_str("description: |\n");
     s.push_str("  Routes the rubezhanin/agency-agents catalog personas into Hermes\n");
     s.push_str("  skills. Generated by the Agency Agents app — see\n");
@@ -362,7 +445,7 @@ fn render_manifest(
     // plugin_meta block (Agency-Agents extension).
     s.push_str("plugin_meta:\n");
     s.push_str("  schema_version: 1\n");
-    s.push_str(&format!("  name: {PLUGIN_ID}\n"));
+    s.push_str(&format!("  name: {plugin_id}\n"));
     s.push_str(&format!("  version: {app_version}\n"));
     s.push_str("  author: Yuri Shvets\n");
     s.push_str("  homepage: https://github.com/rubezhanin/agency-agents-app\n");
@@ -596,5 +679,109 @@ mod tests {
         let a_pos = p.manifest.find("to: a").unwrap();
         let b_pos = p.manifest.find("to: b").unwrap();
         assert!(a_pos < b_pos);
+    }
+
+    // -----------------------------------------------------------------
+    // Phase 4b — multi-plugin routing: custom id / label
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn is_valid_plugin_id_accepts_kebab() {
+        assert!(is_valid_plugin_id("agency-agents-router"));
+        assert!(is_valid_plugin_id("a"));
+        assert!(is_valid_plugin_id("engineering-team"));
+        assert!(is_valid_plugin_id("plugin123"));
+    }
+
+    #[test]
+    fn is_valid_plugin_id_rejects_unsafe() {
+        // Empty, uppercase, dots, slashes, too long.
+        assert!(!is_valid_plugin_id(""));
+        assert!(!is_valid_plugin_id("MixedCase"));
+        assert!(!is_valid_plugin_id("with.dot"));
+        assert!(!is_valid_plugin_id("with/slash"));
+        assert!(!is_valid_plugin_id("with space"));
+        let long: String = "a".repeat(65);
+        assert!(!is_valid_plugin_id(&long));
+    }
+
+    #[test]
+    fn render_named_plugin_uses_custom_id_and_label() {
+        let agents = vec![fixture_agent("alpha")];
+        let sources = vec![fixture_source("alpha")];
+        let plugin = render_named_plugin(
+            &agents,
+            &sources,
+            "abc",
+            "1.0.0",
+            "engineering-team",
+            "Engineering Team Plugin",
+        )
+        .unwrap();
+        assert_eq!(plugin.plugin_id, "engineering-team");
+        assert_eq!(plugin.plugin_label, "Engineering Team Plugin");
+        // Manifest `id:` field reflects the custom plugin id.
+        assert!(plugin.manifest.contains("id: engineering-team\n"));
+        assert!(plugin.manifest.contains("display_name: Engineering Team Plugin\n"));
+        // Router skill's frontmatter `name:` and `# Heading` reflect the id/label.
+        assert!(plugin.router.contains("name: engineering-team\n"));
+        assert!(plugin.router.contains("# Engineering Team Plugin\n"));
+    }
+
+    #[test]
+    fn render_named_plugin_rejects_bad_id() {
+        let agents = vec![fixture_agent("alpha")];
+        let sources = vec![fixture_source("alpha")];
+        let err = render_named_plugin(
+            &agents,
+            &sources,
+            "abc",
+            "1.0.0",
+            "Mixed Case",
+            "Bad",
+        )
+        .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("plugin_id"));
+    }
+
+    #[test]
+    fn render_named_plugin_rejects_empty_label() {
+        let agents = vec![fixture_agent("alpha")];
+        let sources = vec![fixture_source("alpha")];
+        let err = render_named_plugin(
+            &agents,
+            &sources,
+            "abc",
+            "1.0.0",
+            "ok-id",
+            "   ",
+        )
+        .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("plugin_label"));
+    }
+
+    #[test]
+    fn install_to_writes_to_custom_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("custom-plugin");
+        let agents = vec![fixture_agent("alpha")];
+        let sources = vec![fixture_source("alpha")];
+        let plugin = render_named_plugin(
+            &agents,
+            &sources,
+            "abc",
+            "1.0.0",
+            "engineering-team",
+            "Engineering Team",
+        )
+        .unwrap();
+        let report = install_to(&plugin, &dest).unwrap();
+        assert!(dest.join("manifest.yaml").is_file());
+        assert_eq!(report.skill_hashes.len(), 1);
+        // manifest_id matches the custom plugin id.
+        let manifest_text = std::fs::read_to_string(dest.join("manifest.yaml")).unwrap();
+        assert!(manifest_text.contains("id: engineering-team\n"));
     }
 }

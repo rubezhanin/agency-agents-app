@@ -59,6 +59,52 @@ proposed: string,
 differs: boolean, };
 
 /**
+ * One row in the audit log. Always serialised to a single line in
+ * `operations.jsonl`; reads reverse the order so the UI gets newest
+ * first without a full file sort.
+ */
+export type AuditEntry = { 
+/**
+ * ISO-8601 UTC timestamp (RFC 3339).
+ */
+timestamp: string, 
+/**
+ * Stable, machine-readable action name. Convention: `<area>.<verb>`,
+ * e.g. `install.commit`, `hermes.install`, `runbook.apply`,
+ * `settings.update`. Free-form for new areas.
+ */
+kind: string, 
+/**
+ * Free-form human label the UI can show in a list. Falls back to
+ * `kind` when missing.
+ */
+label: string | null, 
+/**
+ * `ok` | `warn` | `fail` — outcome of the operation. `ok` covers
+ * both successful mutations and intentional no-ops.
+ */
+outcome: AuditOutcome, 
+/**
+ * Stable id of the affected entity (slug, plugin_id, runbook
+ * slug, etc.). Optional — bulk operations may leave this empty
+ * and put the count in `detail` instead.
+ */
+targetId: string | null, 
+/**
+ * Free-form context string the UI can render as a subtitle
+ * (e.g. "12 agents, 3 tools", "~/.hermes/plugins/engineering-team").
+ */
+detail: string | null, };
+
+/**
+ * Result of `audit_export`. The UI shows the destination path and
+ * the row count in a success toast.
+ */
+export type AuditExportSummary = { path: string, count: number, };
+
+export type AuditOutcome = "ok" | "warn" | "fail";
+
+/**
  * One entry in the per-app `backups/index.json` ledger — a snapshot of an
  * agent file taken just before a destructive install/update wrote a new
  * render to the same path. The list is what the rollback UI shows and
@@ -203,6 +249,96 @@ bodyHash: string, };
 export type CorpusMeta = { version: string, commit: string | null, fetchedAt: string, count: number, };
 
 /**
+ * Aggregate plan for one install. Returned by the
+ * `deploy_plan` IPC; rendered by the UI as a pre-flight
+ * modal.
+ */
+export type DeployPlan = { 
+/**
+ * One row per filesystem effect, in the order the
+ * renderer returned them.
+ */
+changes: Array<PlanChange>, 
+/**
+ * Convenience aggregate: how many files will be created
+ * (don't exist yet), overwritten (exist with different
+ * bytes), skipped (exist with matching bytes), or refused
+ * (sandbox violation). UI badges use these.
+ */
+summary: PlanSummary, };
+
+export type DestPatterns = { user: Array<string>, project: Array<string>, };
+
+export type Detect = { dirs: Array<string>, agentsDir: string | null, };
+
+/**
+ * Aggregate Hermes health snapshot for the Settings → Hermes tile
+ * (Phase 4c). Bundles the CLI probe + pre-flight summary + plugin
+ * list into a single round-trip so the frontend can run a single
+ * `hermes_health` call on a 60-second poll instead of three.
+ *
+ * The `overall` field is the "headline" status the UI shows in the
+ * tile: `ok` when the CLI is on PATH AND meets the minimum AND
+ * home is writable, `degraded` when the CLI is missing or outdated
+ * (a custom plugin install still works without the CLI — the
+ * renderer writes the directory directly), `down` when the home
+ * directory isn't writable (no install path at all).
+ */
+export type HermesHealthSnapshot = { overall: HermesHealthStatus, probe: HermesProbe, preflight: HermesPreflight, plugins: Array<HermesInstalledPlugin>, checkedAt: string, };
+
+export type HermesHealthStatus = "ok" | "degraded" | "down";
+
+/**
+ * One row in the `hermes_list_plugins` response. The UI uses
+ * `is_canonical` to mark the agency-agents-router plugin distinctly
+ * (it cannot be deleted while the catalog is loaded — only refreshed
+ * or uninstalled explicitly).
+ */
+export type HermesInstalledPlugin = { 
+/**
+ * Plugin id (kebab-case). Equal to the directory basename and the
+ * `manifest.yaml` `id` field.
+ */
+pluginId: string, 
+/**
+ * Human-readable label from `manifest.yaml` `display_name`.
+ */
+label: string, 
+/**
+ * Path to the on-disk plugin directory.
+ */
+path: string, 
+/**
+ * Number of `skills/<slug>.md` files present (the persona count).
+ */
+agentCount: number, 
+/**
+ * True when this is the canonical `agency-agents-router` plugin.
+ */
+isCanonical: boolean, };
+
+/**
+ * Result of a `preflight_hermes` call. The UI renders `checks` as a
+ * list and uses `ready` for the banner headline.
+ */
+export type HermesPreflight = { 
+/**
+ * `true` iff no check has status `fail` (warns are fine).
+ */
+ready: boolean, checks: Array<PreflightCheck>, 
+/**
+ * ISO-8601 UTC timestamp of when the pre-flight ran.
+ */
+checkedAt: string, 
+/**
+ * Path the pre-flight probed for `home-writable` and
+ * `install-target`, surfaced for the UI to display in the hint.
+ */
+home: string, };
+
+export type HermesProbe = { found: boolean, path: string | null, source: ProbeSource, version: string | null, meetsMinimum: boolean, minimum: string, configPath: string | null, kanbanAvailable: boolean, profiles: Array<string>, stderrTail: string | null, };
+
+/**
  * One row of `installs.json` — the ledger of local install actions.
  * `source_hash` records the corpus version installed from;
  * `rendered_hash` is the SHA-256 of the exact bytes written after
@@ -247,6 +383,47 @@ tracked: boolean, };
 export type LogFile = { name: string, size: bigint, createdAt: string, };
 
 /**
+ * One filesystem effect the install *would* have. The set
+ * is the union of every `dests()` entry the render layer
+ * returns for this `(slug, tool, project_path)` triple.
+ */
+export type PlanChange = { "kind": "create", dest: string, size: bigint, } | { "kind": "overwrite", dest: string, before_sha: string, after_sha: string, backup_filename: string, } | { "kind": "noChange", dest: string, sha: string, } | { "kind": "refused", dest: string, reason: string, };
+
+export type PlanSummary = { creates: number, overwrites: number, noChanges: number, refused: number, };
+
+/**
+ * One row in the pre-flight checklist.
+ */
+export type PreflightCheck = { 
+/**
+ * Stable id, e.g. `"hermes-cli"`. Used as an i18n key and in tests.
+ */
+id: string, 
+/**
+ * Human-readable label, e.g. "Hermes CLI".
+ */
+label: string, status: PreflightStatus, 
+/**
+ * Concrete value (path, version, etc.). Empty string when not applicable.
+ */
+detail: string, 
+/**
+ * Optional fix-it suggestion, e.g. "Upgrade with `brew upgrade hermes`."
+ */
+remediation: string | null, 
+/**
+ * When `true`, a `fail` here means the install cannot succeed.
+ */
+blocking: boolean, };
+
+/**
+ * Status of a single pre-flight check.
+ */
+export type PreflightStatus = "ok" | "warn" | "fail";
+
+export type ProbeSource = "path" | "scan" | "missing";
+
+/**
  * A registered project directory for project-scoped installs. The app
  * keeps a Projects list so Library/Tools can show per-project
  * deployment; one agent in five projects = five tracked rows.
@@ -267,10 +444,148 @@ label: string,
 installedCount: number, };
 
 /**
+ * What the caller should do (and tell the user) about each
+ * recovered operation.
+ */
+export type RecoveryAction = { "kind": "needsReview", operation_id: string, operation_type: string, targets: Array<string>, };
+
+/**
+ * Result of a single recovery pass. Serialised into the
+ * `journal_recovery` Tauri event so the UI can render a
+ * startup banner with the affected dests.
+ */
+export type RecoveryReport = { actions: Array<RecoveryAction>, 
+/**
+ * How many journal rows were flipped to `failed` by this
+ * pass. Useful for the startup banner / Activity log entry.
+ */
+recoveredCount: number, 
+/**
+ * How many `pending` / `committing` rows we *found* on disk.
+ * Equal to `recovered_count` in normal operation; can
+ * differ only if the append-failed edge case happens (we
+ * log it as a warning and skip).
+ */
+foundCount: number, 
+/**
+ * Diagnostics worth surfacing in the structured log: a
+ * corrupt journal row we skipped, or a journal file we
+ * couldn't read at all.
+ */
+warnings: Array<string>, };
+
+/**
+ * One row in the apply result. `skipped` covers "runbook lists
+ * this slug but it's not in the loaded corpus" (e.g. the catalog
+ * was pruned). `failed` covers an `install_agent` rejection;
+ * `installed` is the happy path.
+ */
+export type RunbookApplyOutcome = { slug: string, 
+/**
+ * "installed" | "skipped" | "failed".
+ */
+status: string, 
+/**
+ * Human-readable detail, e.g. "tool=claude-code" or
+ * "slug not in corpus".
+ */
+detail: string, };
+
+/**
+ * Aggregate returned from `runbook_apply`. Counts are pre-computed
+ * so the UI doesn't have to fold the outcomes.
+ */
+export type RunbookApplySummary = { runbookSlug: string, tool: string, total: number, installed: number, skipped: number, failed: number, outcomes: Array<RunbookApplyOutcome>, startedAt: string, finishedAt: string, };
+
+/**
  * Deployment scope. User-global tools write to fixed `~/…` dests;
  * project-scoped tools install into a tracked `project_path`.
  */
 export type Scope = "user" | "project";
+
+export type ScopeCaps = { user: boolean, project: boolean, };
+
+/**
+ * One tool entry from the catalog. The schema is **strict** —
+ * every required field must be present, otherwise loading
+ * fails with a typed error. This is a deliberate change from
+ * the loose `registry::ToolSpec`, where most fields were
+ * optional.
+ */
+export type ToolEntry = { 
+/**
+ * camelCase wire value (e.g. `claudeCode`). Must be unique
+ * across the manifest.
+ */
+id: string, 
+/**
+ * Human label shown in the UI (e.g. "Claude Code").
+ */
+label: string, 
+/**
+ * Short label for the sidebar / dense layouts.
+ */
+short: string, 
+/**
+ * Stable on-disk key (e.g. `claude-code`). Must be
+ * unique; this is the dict key in `tools.json`.
+ */
+kebab: string, 
+/**
+ * Brand colour (hex). Optional — older entries may omit.
+ */
+accent: string | null, 
+/**
+ * Icon name (resolved by the frontend icon map).
+ */
+icon: string | null, 
+/**
+ * Sort order in the Tools panel.
+ */
+order: number, 
+/**
+ * Where the tool can deploy.
+ */
+scope: ScopeCaps, 
+/**
+ * Detection hints.
+ */
+detect: Detect, 
+/**
+ * Probe command for the local version.
+ */
+version: VersionProbe | null, 
+/**
+ * Renderer contract. The same `format` name guarantees
+ * byte-identical output across tools.
+ */
+format: string, 
+/**
+ * How the slug is derived for this tool. `name` = use
+ * the agent's `name` frontmatter, `source` = use the
+ * file basename, `null` (omitted) = no per-agent slug
+ * (roster / plugin). Stored as a raw string and validated
+ * post-parse so the bundled `tools.json` (which uses
+ * kebab values like `per-agent`) doesn't have to be
+ * rewritten for this spike. Phase 3 (plugin architecture)
+ * will decide which form is canonical.
+ */
+slugFrom: string | null, 
+/**
+ * Optional prefix on the slug (e.g. `agency-` for
+ * `osaurus` so the dir is `~/.osaurus/skills/agency-foo/`).
+ */
+slugPrefix: string | null, 
+/**
+ * Destination patterns, one per supported scope.
+ */
+dest: DestPatterns, 
+/**
+ * Install mechanism. Stored as a raw string and validated
+ * post-parse; see `KNOWN_INSTALL_KINDS` and the
+ * `validator()` pass.
+ */
+installKind: string, };
 
 /**
  * View-model for the Tools section — a detected AI tool plus its
@@ -284,6 +599,27 @@ export type ToolInfo = { tool: string, label: string, detected: boolean, scope: 
 customPath: string | null, };
 
 /**
+ * Validated tool manifest. Loaded once at startup (or on
+ * Settings → Catalog → "Refresh manifest" click) and re-used.
+ * Mutation is rare enough that we don't bother with a
+ * `Mutex` / `RwLock` — readers either see the old or the new.
+ */
+export type ToolManifest = { 
+/**
+ * Map of `kebab` → entry. We key on `kebab` (not `id`)
+ * because `kebab` is the on-disk / catalog-stable key
+ * (e.g. `claude-code`); `id` is the camelCase wire value
+ * (`claudeCode`) the frontend uses.
+ */
+tools: { [key in string]?: ToolEntry }, 
+/**
+ * Loader-level warnings: non-fatal but worth surfacing
+ * (e.g. an unknown `format` that the app can't render).
+ * Populated by the validator, not the deserialiser.
+ */
+warnings: Array<string>, };
+
+/**
  * Best-effort detected version string for a tool, from probing `<bin>
  * --version`. `version` is `None` when the binary isn't on PATH, the probe
  * timed out, or the tool has no known version command.
@@ -295,3 +631,5 @@ export type ToolVersion = { tool: string, version: string | null, };
  * `body_hash` unchanged) or substantive (prompt body changed).
  */
 export type UpdateKind = "cosmetic" | "substantive";
+
+export type VersionProbe = { bin: string, args: Array<string>, };

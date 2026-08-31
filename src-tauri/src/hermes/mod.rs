@@ -14,11 +14,14 @@
 //! `CREATE_NO_WINDOW` on Windows so the dashboard doesn't flash terminal
 //! windows (issue #84 in the upstream tracker).
 
+pub mod preflight;
 pub mod probe;
 pub mod scan;
 pub mod version;
 
 // Re-exports the public surface. Internal types (`ProbeInputs`,
-// `ProbeSource`, `ScanCandidate`, `ScanOrigin`) stay inside their
-// modules — callers go through the public functions and `HermesProbe`.
+// `ProbeSource`, `ScanCandidate`, `ScanOrigin`, `PreflightInputs`)
+// stay inside their modules — callers go through the public
+// functions and the public DTOs.
+pub use preflight::{preflight_hermes, HermesPreflight, PreflightCheck, PreflightStatus};
 pub use probe::{probe_hermes, HermesProbe, ProbeOptions};

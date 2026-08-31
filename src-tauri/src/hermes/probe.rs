@@ -15,11 +15,13 @@ use std::process::Stdio;
 
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
+use ts_rs::TS;
 
 use crate::hermes::scan::{scan_beyond_path, ScanOptions};
 use crate::hermes::version::{semver_gte, MIN_HERMES};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 #[serde(rename_all = "lowercase")]
 pub enum ProbeSource {
     Path,
@@ -27,7 +29,8 @@ pub enum ProbeSource {
     Missing,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/lib/types.generated.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct HermesProbe {
     pub found: bool,

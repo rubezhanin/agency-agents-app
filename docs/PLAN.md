@@ -6,24 +6,41 @@
 **Stack:** Tauri 2, Rust, SvelteKit, Svelte 5, TypeScript  
 **License:** MIT
 
-## v1.0 Changelog (2026-08-29)
+## v1.2 Changelog (2026-08-31)
 
-Cut as `v1.0.0` (`HEAD`). Locally green; CI gate on GitHub Actions requires
-account-side fix (see release notes for `v1.0.0`).
+Cut as `v1.2.0` (`80f79a5`). Closes out the **Trustworthy Core** roadmap —
+transactional engine, manifest, plan/dry-run, Hermes deep integration, durable
+audit log, and team-mode export/clear. All 6 phases plus a Phase 5 follow-up
+shipped as 12 commits ahead of `v1.0.0` (plus a v1.1.0 cut on `b96bcff`):
 
-Closed since the v0.4.0 sprint plan:
-
-- **A.** Re-brand to `rubezhanin` ✅
-- **B.** Hermes plugin (full renderer + install + reconcile) ✅ (`0d3062a`)
-- **C.** CI/CD cross-platform gates (ubuntu + windows + macos, fmt + clippy + test + svelte-check + build) ✅
-- **D.** God-module decomposition ✅ (`a8aa2ce` → `6726d24`, 4 commits)
-- **E.** Features (partial):
-  - Path sandbox (`util::sandbox::resolve_safe_path`) ✅ (`1836dba`, `76a9d5f`)
-  - Rust ↔ TS type generation via `ts-rs` + drift CI ✅ (`c4e7dec`, `a0dd528`)
-  - Rollback / Time machine over `backups/index.json` ✅ (`4a0d4fa`)
-  - Accessibility pass: skip-to-content, focus return, focus-visible, sidebar keyboard nav ✅ (`13b917e`)
-  - Structured on-disk logs (Rust) + Settings → Logs UI ✅ (`3a83a60`)
-  - Schema migrations / pre-flight validation / virtual scroll / beta channel / frontend structured logging — **deferred to v1.x**
+- **Plan / Dry Run** (`48ef528`) — `deploy_plan` IPC renders the install into a
+  structured `DeployPlan { changes, summary }` without writing anything.
+  Path-sandbox refuses any dest that escapes the user home.
+- **Hermes pre-flight** (`72dd020`) — `hermes_preflight` runs 5 independent
+  checks (CLI / kanban / Node / home writable / install target) and returns
+  a colour-coded checklist.
+- **Multi-plugin routing** (`d95a289`) — `render_named_plugin(agents, sources,
+  catalog_ref, app_version, plugin_id, plugin_label)` parameterises the
+  renderer so each division can ship as its own plugin.
+- **Aggregated health + 60s auto-refresh** (`eabcccc`) — `hermes_health`
+  bundles probe + preflight + installed-plugins into a single atomic snapshot
+  with `HermesHealthStatus = ok | degraded | down`. The Settings tile polls
+  on a 60s `setInterval` (lifecycle via onMount/onDestroy).
+- **DeployPreview modal** (`2a57535`) — UI for the Phase 3 plan: colour-coded
+  checklist of creates/overwrites/unchanged/refused, destructive-warning
+  callout, "Proceed anyway" wording for destructive plans.
+- **Durable audit log** (`4b57815`) — `app_data/audit/operations.jsonl`,
+  append-only, `create + append + sync_all`, ts-rs `AuditEntry` DTO. New
+  Settings → Audit section; install store emits one entry per success/fail.
+- **Team-mode export / clear** (`ebc0b15`) — `audit_export(dest)` writes a
+  pretty-printed JSON array atomically through `.tmp-<uuid>` + `rename`;
+  `audit_clear()` truncates the log behind a `window.confirm` gate.
+- **Runbook apply** (`c110749`, v1.3.0 pending) — `runbook_apply(slug, tool)`
+  IPC resolves the NEXUS runbook to a deduplicated slug list and returns a
+  structured `RunbookApplySummary`; the UI gets a dedicated "Apply all" button
+  that drives the per-slug installs through the existing `install` store.
+- **v1.1.0 cut** (`b96bcff`) — version bump for the Phase 3+4 + DeployPreview
+  release.
 
 ## Vision
 
