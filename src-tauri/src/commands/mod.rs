@@ -9,6 +9,8 @@ pub mod audit;
 #[allow(unused_imports)]
 pub mod github;
 #[allow(unused_imports)]
+pub mod runbook;
+#[allow(unused_imports)]
 pub mod hermes;
 #[allow(unused_imports)]
 pub mod logs;
@@ -23,6 +25,8 @@ pub mod updater;
 pub use audit::*;
 #[allow(unused_imports)]
 pub use github::*;
+#[allow(unused_imports)]
+pub use runbook::*;
 #[allow(unused_imports)]
 pub use hermes::*;
 #[allow(unused_imports)]

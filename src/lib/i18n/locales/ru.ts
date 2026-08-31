@@ -782,6 +782,13 @@ const ru = {
   "audit.clearConfirm": "Стереть локальный журнал? Действие необратимо. Ранее экспортированные файлы на диске не пострадают.",
   "audit.clearSuccess": "Удалено записей: {count}",
   "audit.clearFailed": "Не удалось очистить журнал: {message}",
+  "runbooks.apply": "Применить всё",
+  "runbooks.applying": "Применяем…",
+  "runbooks.applyTitle": "Установить все агенты из ранбука одной кнопкой",
+  "runbooks.applySummary": "Ранбук {slug}: установлено {installed} из {total}",
+  "runbooks.applyPartial": "Установлено {installed} из {total} (часть пропущена или с ошибкой)",
+  "runbooks.applyFailedAll": "Ранбук {slug}: ни один агент не установлен",
+  "runbooks.applyFailed": "Не удалось применить ранбук: {message}",
   "hermes.viewPluginHint": "Показать ~/.hermes/plugins/agency-agents-router/ в Проводнике/Finder.",
   // Backups / rollback section (0.4.5)
   "backups.title": "Резервные копии и откат",

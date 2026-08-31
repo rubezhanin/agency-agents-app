@@ -475,6 +475,29 @@ foundCount: number,
 warnings: Array<string>, };
 
 /**
+ * One row in the apply result. `skipped` covers "runbook lists
+ * this slug but it's not in the loaded corpus" (e.g. the catalog
+ * was pruned). `failed` covers an `install_agent` rejection;
+ * `installed` is the happy path.
+ */
+export type RunbookApplyOutcome = { slug: string, 
+/**
+ * "installed" | "skipped" | "failed".
+ */
+status: string, 
+/**
+ * Human-readable detail, e.g. "tool=claude-code" or
+ * "slug not in corpus".
+ */
+detail: string, };
+
+/**
+ * Aggregate returned from `runbook_apply`. Counts are pre-computed
+ * so the UI doesn't have to fold the outcomes.
+ */
+export type RunbookApplySummary = { runbookSlug: string, tool: string, total: number, installed: number, skipped: number, failed: number, outcomes: Array<RunbookApplyOutcome>, startedAt: string, finishedAt: string, };
+
+/**
  * Deployment scope. User-global tools write to fixed `~/…` dests;
  * project-scoped tools install into a tracked `project_path`.
  */

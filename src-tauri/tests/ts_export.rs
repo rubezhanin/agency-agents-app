@@ -65,6 +65,11 @@ use rubezhanin_agency_agents_lib::{
     CrateRootAuditOutcome as AuditOutcome,
     CrateRootAuditExportSummary as AuditExportSummary,
 };
+// Runbook apply (Phase 5 follow-up).
+use rubezhanin_agency_agents_lib::{
+    CrateRootRunbookApplyOutcome as RunbookApplyOutcome,
+    CrateRootRunbookApplySummary as RunbookApplySummary,
+};
 
 #[test]
 fn regenerate_typescript_bindings() {
@@ -111,4 +116,7 @@ fn regenerate_typescript_bindings() {
     AuditOutcome::export_all().expect("export AuditOutcome");
     // Phase 6 — audit export summary.
     AuditExportSummary::export_all().expect("export AuditExportSummary");
+    // Phase 5 follow-up — runbook apply.
+    RunbookApplyOutcome::export_all().expect("export RunbookApplyOutcome");
+    RunbookApplySummary::export_all().expect("export RunbookApplySummary");
 }

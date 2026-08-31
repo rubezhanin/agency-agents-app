@@ -56,6 +56,13 @@ pub use crate::hermes::probe::{HermesProbe as CrateRootHermesProbe, ProbeSource 
 pub use crate::audit::{AuditEntry as CrateRootAuditEntry, AuditOutcome as CrateRootAuditOutcome};
 // Re-export the audit export summary (Phase 6 — team-mode export).
 pub use crate::commands::audit::AuditExportSummary as CrateRootAuditExportSummary;
+// Re-export the runbook apply DTOs (Phase 5 follow-up: a real
+// runbook_apply IPC that resolves a runbook's roster to slugs
+// and reports per-slug outcomes).
+pub use crate::commands::runbook::{
+    RunbookApplyOutcome as CrateRootRunbookApplyOutcome,
+    RunbookApplySummary as CrateRootRunbookApplySummary,
+};
 // Re-export the Hermes installed-plugin DTO (Phase 4b — multi-plugin
 // routing). Lives in `commands::hermes` so the ts-rs integration test
 // reaches it via the same crate-root alias pattern.
@@ -379,6 +386,12 @@ pub fn run() {
             // pretty-printed JSON array of every entry.
             commands::audit_export,
             commands::audit_clear,
+            // Phase 5 follow-up — one-shot runbook apply. The
+            // backend resolves the runbook to a deduplicated list
+            // of slugs and returns a structured summary. The actual
+            // per-slug installs are driven from the frontend's
+            // `install` store using the same data.
+            commands::runbook_apply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

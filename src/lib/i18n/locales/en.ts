@@ -795,6 +795,13 @@ const en = {
   "audit.clearConfirm": "Erase the local audit log? This cannot be undone. Exported files on disk are not affected.",
   "audit.clearSuccess": "Cleared {count} entries",
   "audit.clearFailed": "Could not clear audit log: {message}",
+  "runbooks.apply": "Apply all",
+  "runbooks.applying": "Applying…",
+  "runbooks.applyTitle": "One-shot install of every agent in this runbook",
+  "runbooks.applySummary": "Runbook {slug}: {installed}/{total} installed",
+  "runbooks.applyPartial": "{installed}/{total} agents installed (some skipped or failed)",
+  "runbooks.applyFailedAll": "Runbook {slug}: no agents could be installed",
+  "runbooks.applyFailed": "Could not apply runbook: {message}",
   "hermes.viewPluginHint": "Reveal ~/.hermes/plugins/agency-agents-router/ in Finder/Explorer.",
   // Backups / rollback section (0.4.5)
   "backups.title": "Backups & Rollback",
