@@ -41,7 +41,7 @@ serde_json = "1"
 # committed to the repo; a CI drift check (planned, not in this commit)
 # will fail the build if `cargo test --test ts_export` regenerates a
 # file with a non-empty git diff.
-ts-rs = "10"
+ts-rs = "12"
 tokio = { version = "1", features = ["process", "io-util", "rt-multi-thread", "macros", "sync", "time"] }
 
 # Error handling
