@@ -67,7 +67,7 @@ base64 = "0.23"
 # Both already transit through the lockfile via tauri-plugin-updater /
 # reqwest — pinning them here makes the dependency intentional rather
 # than incidental.
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 
 # Gzip codec for the bundled catalog (Phase 12a). Used both for
